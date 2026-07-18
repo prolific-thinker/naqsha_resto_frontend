@@ -8,7 +8,7 @@ import type { Kot, Station } from '@/types/domain';
 type Accent = { borderL: string; timer: string; action: string };
 
 /** Station-themed accents for the active state (palette-swap by :station). */
-export const STATION_ACCENT: Record<Station, Accent> = {
+const STATION_ACCENT: Record<Station, Accent> = {
   drinks: { borderL: 'border-l-saffron', timer: 'text-saffron', action: 'bg-saffron/15 text-saffron' },
   main: { borderL: 'border-l-amber', timer: 'text-amber', action: 'bg-amber/15 text-amber' },
   bbq: { borderL: 'border-l-alert', timer: 'text-alert', action: 'bg-alert/15 text-alert' },
