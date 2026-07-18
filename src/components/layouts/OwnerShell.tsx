@@ -19,7 +19,7 @@ type Props = {
  */
 export function OwnerShell({ greet, title, lead, actions, tabs, children, className }: Props) {
   return (
-    <div className={cn('flex min-h-screen flex-col bg-paper', className)}>
+    <div className={cn('flex min-h-screen flex-col bg-paper text-ink', className)}>
       <div className="border-b border-line bg-paper px-6 pt-8 pb-6 sm:px-10">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>

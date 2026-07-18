@@ -15,7 +15,7 @@ export function PhoneShell({ children, className }: Props) {
       <div
         className={cn(
           'mx-auto flex min-h-screen w-full max-w-[420px] flex-col',
-          'bg-gradient-to-b from-paper-2 to-paper px-5 py-6',
+          'bg-gradient-to-b from-paper-2 to-paper px-5 py-6 text-ink',
           className,
         )}
       >

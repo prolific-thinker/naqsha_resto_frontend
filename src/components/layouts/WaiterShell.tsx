@@ -18,7 +18,7 @@ type Props = {
  */
 export function WaiterShell({ left, right, tabs, children, className }: Props) {
   return (
-    <div className={cn('flex h-screen flex-col overflow-hidden bg-paper', className)}>
+    <div className={cn('flex h-screen flex-col overflow-hidden bg-paper text-ink', className)}>
       <div className="flex h-14 flex-shrink-0 items-center justify-between border-b border-line bg-paper-2 px-6">
         <div className="flex items-center gap-5">
           <BrandMark />

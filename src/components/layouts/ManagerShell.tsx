@@ -22,7 +22,7 @@ export function ManagerShell({ title, refCode, right, children, theme = 'paper',
   return (
     <div className={cn('grid h-screen grid-cols-[60px_1fr] overflow-hidden', className)}>
       <NavRail className={dark ? 'bg-ink-2' : undefined} />
-      <div className={cn('flex flex-col overflow-hidden', dark ? 'bg-ink text-paper' : 'bg-paper')}>
+      <div className={cn('flex flex-col overflow-hidden', dark ? 'bg-ink text-paper' : 'bg-paper text-ink')}>
         <div
           className={cn(
             'flex h-[60px] flex-shrink-0 items-center justify-between border-b px-6',
