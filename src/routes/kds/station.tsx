@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { KdsShell } from '@/components/layouts/KdsShell';
 import { KotCard } from '@/components/kot/KotCard';
+import { EmptyState } from '@/components/naqsha/EmptyState';
+import { ErrorState } from '@/components/naqsha/ErrorState';
 import { cn } from '@/lib/utils';
 import { clock, dayLabel } from '@/lib/format';
 import type { Kot, Station } from '@/types/domain';
@@ -21,10 +23,12 @@ function useClock() {
 function Column({
   label,
   count,
+  empty,
   children,
 }: {
   label: string;
   count: number;
+  empty?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -35,7 +39,9 @@ function Column({
           {count.toString().padStart(2, '0')}
         </span>
       </div>
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">{children}</div>
+      <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3">
+        {count === 0 && empty ? <EmptyState tone="dark" message={empty} /> : children}
+      </div>
     </div>
   );
 }
@@ -44,9 +50,21 @@ export default function KdsStation() {
   const { station } = useParams();
   const now = useClock();
   const isValid = STATIONS.includes(station as Station);
-  const { data: board, isLoading } = useKotStream((station as Station) ?? 'drinks');
+  const { data: board, isLoading, isError, refetch } = useKotStream(
+    (station as Station) ?? 'drinks',
+  );
 
   if (!isValid) return <Navigate to="/kds/drinks" replace />;
+
+  if (isError) {
+    return (
+      <KdsShell head={<span className="font-mono text-sm text-muted-2">Station unavailable</span>}>
+        <div className="grid flex-1 place-items-center">
+          <ErrorState tone="dark" label="the station board" onRetry={() => void refetch()} />
+        </div>
+      </KdsShell>
+    );
+  }
 
   if (isLoading || !board) {
     return (
@@ -99,7 +117,7 @@ export default function KdsStation() {
       }
     >
       <div className="grid min-h-0 flex-1 grid-cols-[1fr_1.4fr_1fr] gap-4">
-        <Column label="Queue" count={queue.length}>
+        <Column label="Queue" count={queue.length} empty="Queue is clear.">
           {queue.map((kot: Kot) => (
             <KotCard key={kot.ref} kot={kot} />
           ))}
@@ -123,7 +141,11 @@ export default function KdsStation() {
           )}
         </Column>
 
-        <Column label="Prepared · awaiting pickup" count={prepared.length}>
+        <Column
+          label="Prepared · awaiting pickup"
+          count={prepared.length}
+          empty="Nothing awaiting pickup."
+        >
           {prepared.map((kot: Kot) => (
             <KotCard key={kot.ref} kot={kot} />
           ))}

@@ -2,6 +2,8 @@ import { Check, Timer } from 'lucide-react';
 import { ManagerShell } from '@/components/layouts/ManagerShell';
 import { Chip } from '@/components/naqsha/Chip';
 import { CornerTicks } from '@/components/naqsha/CornerTicks';
+import { EmptyState } from '@/components/naqsha/EmptyState';
+import { ErrorState } from '@/components/naqsha/ErrorState';
 import { SheetRef } from '@/components/naqsha/SheetRef';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -73,7 +75,7 @@ function ActionCell({ row }: { row: AggregateRow }) {
 }
 
 export default function ManagerKdsAggregate() {
-  const { data: rows, isLoading } = useAggregate();
+  const { data: rows, isLoading, isError, refetch } = useAggregate();
 
   return (
     <ManagerShell
@@ -121,12 +123,16 @@ export default function ManagerKdsAggregate() {
           </div>
         </div>
 
-        {isLoading ? (
+        {isError ? (
+          <ErrorState label="open orders" onRetry={() => void refetch()} />
+        ) : isLoading ? (
           <div className="flex flex-col gap-2">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="h-[104px] animate-pulse rounded-md bg-paper-3" />
             ))}
           </div>
+        ) : (rows ?? []).length === 0 ? (
+          <EmptyState message="No open orders across the stations." />
         ) : (
           <div className="flex flex-col gap-2">
             {(rows ?? []).map((row) => (

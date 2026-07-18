@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { ManagerShell } from '@/components/layouts/ManagerShell';
 import { CornerTicks } from '@/components/naqsha/CornerTicks';
 import { DataRow } from '@/components/naqsha/DataRow';
+import { ErrorState } from '@/components/naqsha/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { BillLine } from '@/components/bill/BillLine';
 import { BatchMarker } from '@/components/bill/BatchMarker';
@@ -20,9 +21,19 @@ const MOPS: { kind: MopKind; name: string; desc: string }[] = [
 
 export default function ManagerPos() {
   const { tableId = 'T-07' } = useParams();
-  const { data: inv, isLoading } = useInvoice(tableId);
+  const { data: inv, isLoading, isError, refetch } = useInvoice(tableId);
   const [split, setSplit] = useState(4);
   const [mop, setMop] = useState<MopKind>('cash');
+
+  if (isError) {
+    return (
+      <ManagerShell title="Bill preview" refCode="unavailable">
+        <div className="grid flex-1 place-items-center p-6">
+          <ErrorState label="the bill" onRetry={() => void refetch()} />
+        </div>
+      </ManagerShell>
+    );
+  }
 
   if (isLoading || !inv) {
     return (

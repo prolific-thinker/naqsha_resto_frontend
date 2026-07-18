@@ -1,6 +1,7 @@
 import { OwnerShell } from '@/components/layouts/OwnerShell';
 import { Chip } from '@/components/naqsha/Chip';
 import { CornerTicks } from '@/components/naqsha/CornerTicks';
+import { ErrorState } from '@/components/naqsha/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { money } from '@/lib/format';
@@ -72,7 +73,7 @@ function ApprovalCard({ entry }: { entry: Wastage }) {
 }
 
 export default function OwnerWastageApprovals() {
-  const { data: approvals, isLoading } = usePendingApprovals();
+  const { data: approvals, isLoading, isError, refetch } = usePendingApprovals();
   const { data: counts } = useApprovalCounts();
   const { data: week } = useWeekSummary();
 
@@ -108,7 +109,9 @@ export default function OwnerWastageApprovals() {
         </div>
       }
     >
-      {isLoading ? (
+      {isError ? (
+        <ErrorState label="pending approvals" onRetry={() => void refetch()} />
+      ) : isLoading ? (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-[150px] animate-pulse rounded-md bg-paper-3" />

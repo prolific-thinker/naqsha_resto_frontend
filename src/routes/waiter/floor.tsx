@@ -2,6 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import { WaiterShell } from '@/components/layouts/WaiterShell';
 import { TableCard } from '@/components/table/TableCard';
 import { Chip } from '@/components/naqsha/Chip';
+import { EmptyState } from '@/components/naqsha/EmptyState';
+import { ErrorState } from '@/components/naqsha/ErrorState';
 import { SheetRef } from '@/components/naqsha/SheetRef';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -45,7 +47,7 @@ function Legend() {
 export default function WaiterFloor() {
   const navigate = useNavigate();
   const session = useSessionMeta('waiter');
-  const { data: tables, isLoading } = useWaiterTables();
+  const { data: tables, isLoading, isError, refetch } = useWaiterTables();
   const { data: takeaway } = useTakeawayOrders();
 
   const mineCount = (tables ?? []).filter((t) => t.state === 'mine').length;
@@ -68,11 +70,19 @@ export default function WaiterFloor() {
       <div className="h-full overflow-y-auto pb-6">
         <Legend />
 
-        {isLoading ? (
+        {isError ? (
+          <div className="px-6">
+            <ErrorState label="the floor" onRetry={() => void refetch()} />
+          </div>
+        ) : isLoading ? (
           <div className="grid grid-cols-5 gap-3 px-6">
             {Array.from({ length: 10 }).map((_, i) => (
               <div key={i} className="min-h-[96px] animate-pulse rounded-md bg-paper-3" />
             ))}
+          </div>
+        ) : (tables ?? []).length === 0 ? (
+          <div className="px-6">
+            <EmptyState message="No open tables — the floor is clear." />
           </div>
         ) : (
           <div className="grid grid-cols-5 gap-3 px-6">

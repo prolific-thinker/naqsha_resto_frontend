@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { WaiterShell } from '@/components/layouts/WaiterShell';
+import { EmptyState } from '@/components/naqsha/EmptyState';
+import { ErrorState } from '@/components/naqsha/ErrorState';
 import { SheetRef } from '@/components/naqsha/SheetRef';
 import { cn } from '@/lib/utils';
 import { money } from '@/lib/format';
@@ -24,7 +26,7 @@ export default function WaiterMenuCart() {
   const { tableId = 'T-02' } = useParams();
   const session = useSessionMeta('waiter');
   const { data: categories } = useMenuCategories();
-  const { data: items } = useMenuItems();
+  const { data: items, isError: itemsError, refetch: refetchItems } = useMenuItems();
 
   const [activeCat, setActiveCat] = useState('cat-coffee');
   const [query, setQuery] = useState('');
@@ -111,11 +113,17 @@ export default function WaiterMenuCart() {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5">
-            {visibleItems.map((item) => (
-              <MenuCard key={item.id} item={item} onAdd={() => addItem(item)} />
-            ))}
-          </div>
+          {itemsError ? (
+            <ErrorState label="the menu" onRetry={() => void refetchItems()} />
+          ) : visibleItems.length === 0 ? (
+            <EmptyState message={query ? `No items match “${query}”.` : 'No items in this category.'} />
+          ) : (
+            <div className="grid grid-cols-3 gap-2.5">
+              {visibleItems.map((item) => (
+                <MenuCard key={item.id} item={item} onAdd={() => addItem(item)} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Cart */}

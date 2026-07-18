@@ -1,5 +1,6 @@
 import { OwnerShell } from '@/components/layouts/OwnerShell';
 import { CornerTicks } from '@/components/naqsha/CornerTicks';
+import { ErrorState } from '@/components/naqsha/ErrorState';
 import { SheetRef } from '@/components/naqsha/SheetRef';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -59,7 +60,15 @@ function MiniCard({ stat }: { stat: MiniStat }) {
 }
 
 export default function OwnerDashboard() {
-  const { data, isLoading } = useOwnerDashboard();
+  const { data, isLoading, isError, refetch } = useOwnerDashboard();
+
+  if (isError) {
+    return (
+      <OwnerShell greet="Dashboard" title="Dashboard">
+        <ErrorState label="today's numbers" onRetry={() => void refetch()} />
+      </OwnerShell>
+    );
+  }
 
   if (isLoading || !data) {
     return (

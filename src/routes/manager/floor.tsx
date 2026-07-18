@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { ManagerShell } from '@/components/layouts/ManagerShell';
 import { StatTile } from '@/components/naqsha/StatTile';
+import { EmptyState } from '@/components/naqsha/EmptyState';
+import { ErrorState } from '@/components/naqsha/ErrorState';
 import { TableCard } from '@/components/table/TableCard';
 import { Button } from '@/components/ui/Button';
 import { useManagerTables } from '@/hooks/useOpenTables';
@@ -22,7 +24,7 @@ const FLOOR_STATS: Tile[] = [
 
 export default function ManagerFloor() {
   const navigate = useNavigate();
-  const { data: tables, isLoading } = useManagerTables();
+  const { data: tables, isLoading, isError, refetch } = useManagerTables();
 
   return (
     <ManagerShell
@@ -58,12 +60,16 @@ export default function ManagerFloor() {
           ))}
         </div>
 
-        {isLoading ? (
+        {isError ? (
+          <ErrorState label="the floor" onRetry={() => void refetch()} />
+        ) : isLoading ? (
           <div className="grid grid-cols-4 gap-3">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="min-h-[130px] animate-pulse rounded-md bg-paper-3" />
             ))}
           </div>
+        ) : (tables ?? []).length === 0 ? (
+          <EmptyState message="No open tables yet this session." />
         ) : (
           <div className="grid grid-cols-4 gap-3">
             {(tables ?? []).map((table) => (
