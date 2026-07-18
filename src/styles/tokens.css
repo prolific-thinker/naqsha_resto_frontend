@@ -1,0 +1,40 @@
+/*
+ * Naqsha design tokens — mirror of tailwind.config.ts.
+ * Ported verbatim from naqsha-mockups.html :root. Kept as CSS custom
+ * properties so non-Tailwind contexts (raw gradients, shadows) can reference
+ * the same values. Tailwind config is the primary source; keep in sync.
+ */
+:root {
+  --ink: #0f1620;
+  --ink-2: #1a1f2a;
+  --ink-3: #232935;
+  --paper: #f7f4ec;
+  --paper-2: #fbf9f3;
+  --paper-3: #efead9;
+  --paper-4: #e6dfcc;
+  --teal: #124c5a;
+  --teal-2: #1b6674;
+  --teal-3: #e8f1f2;
+  --saffron: #dfa02b;
+  --saffron-2: #f5d888;
+  --success: #2e7d5b;
+  --success-2: #dfeee4;
+  --alert: #b8362b;
+  --alert-2: #f5dad5;
+  --amber: #c2620f;
+  --amber-2: #f7e4c7;
+  --muted: #736c60;
+  --muted-2: #a69e90;
+  --line: #d8d1c0;
+  --line-2: #c4bca9;
+  --line-strong: #a69e90;
+
+  /* Station accents */
+  --station-drinks: #4ea5b4;
+  --station-main: #c2620f;
+  --station-bbq: #b8362b;
+
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
