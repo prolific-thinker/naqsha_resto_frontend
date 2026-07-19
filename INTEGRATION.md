@@ -1,240 +1,262 @@
-# Naqsha Frontend — Build Notes & Backend Integration Guide
+# Naqsha Frontend — Backend Integration & Owner's Guide
 
-This document records what was built and gives the backend contract you connect
-to. It is split into:
+> This is **your** working document. Study it, edit it, rename endpoints to match
+> your backend, and fill the `TODO(you)` markers. It covers: how to point the app
+> at your backend, the full API endpoint list, the data-flow hierarchy, the
+> response contracts, realtime, and conventions.
 
-1. [What was built](#1-what-was-built)
-2. [How the data layer works (the swap point)](#2-how-the-data-layer-works)
-3. [Read endpoints — already wired](#3-read-endpoints--already-wired) (just replace the mock body with `fetch`)
-4. [Action / mutation endpoints — need wiring](#4-action--mutation-endpoints--need-wiring) (UI triggers exist; no api function yet)
-5. [Realtime channel contract](#5-realtime-channel-contract)
-6. [Domain types & currency notes](#6-domain-types--conventions)
-
-> **Contract status:** the paths and payloads below are **proposals** — the
-> backend contract was not frozen at build time. The frontend depends only on
-> the **response *shapes*** (the domain types / Zod schemas), not on URLs. Adopt
-> the shapes; the paths are yours to rename. When you change a URL you touch
-> exactly one file in `src/lib/api/*`.
+**Contract status:** paths below are *suggestions*. The frontend depends on
+response **shapes** (the domain types / Zod schemas), not URLs. Rename any path
+in **`src/lib/api/endpoints.ts`** — one file — and the app follows.
 
 ---
 
-## 1. What was built
+## 0. Connect it to your backend (2 steps)
 
-A single Vite + React 18 + TypeScript (strict) SPA serving all 11 screens from
-`naqsha-mockups.html`, five role UIs:
+```bash
+cp .env.example .env.local
+```
 
-| Sheet | Route | Screen |
-|---|---|---|
-| A-01 | `/waiter/tables` | Waiter floor / table select |
-| A-02 | `/waiter/tables/:tableId` | Waiter menu + cart |
-| K-01 | `/kds/:station` (`drinks`\|`main`\|`bbq`) | Kitchen display, palette-swapped per station |
-| M-01 | `/manager/floor` | Manager floor (stat tiles + table grid) |
-| M-02 | `/manager/kds` | Manager KDS aggregate (row per table) |
-| M-03 | `/manager/pos/:tableId` | POS / bill / split / MOP |
-| M-04 | `/manager/wastage` | Wastage entry form |
-| M-05 | `/manager/cameras` | 4-cam grid (CSS placeholders) |
-| O-01 | `/owner/dashboard` | Owner P&L dashboard |
-| O-02 | `/owner/wastage` | Owner wastage approvals |
-| C-01 | `/feedback/:tableSlug` | Customer feedback (public, no auth) |
+```dotenv
+# .env.local
+VITE_API_BASE=https://your-backend.example/api   # TODO(you): your base URL, no trailing slash
+VITE_USE_MOCKS=false                              # false → real HTTP; true/unset → in-memory mocks
+```
 
-Stack: Tailwind (tokens from the mockup), React Router v6 (every route a lazy
-chunk), TanStack Query (server state), Zustand (cart + session), Zod (response
-validation), date-fns, lucide-react. `/dev/components` is a dev-only gallery.
+That's it. With `VITE_USE_MOCKS=false`, every wired read endpoint hits
+`VITE_API_BASE + <path from endpoints.ts>` and validates the JSON against its Zod
+schema. Leave it `true` (or unset) to keep developing against mocks with no
+backend running.
 
-Out of scope (per handover): auth, admin/config surfaces, real Frappe calls.
+- **Where paths live:** `src/lib/api/endpoints.ts` (rename freely).
+- **Where the switch lives:** `src/lib/api/http.ts` (`USE_MOCKS`, `API_BASE`, auth header `TODO(you)`).
+- **Auth:** none yet. Add your session token/branch header in `http.ts → headers()`.
 
 ---
 
-## 2. How the data layer works
+## 1. Data-flow hierarchy
 
-Nothing in the UI is coupled to endpoint shapes:
+### Request flow (what happens on load)
 
 ```
-component / screen
-   → hook (src/hooks/*)                     TanStack Query
-      → api function (src/lib/api/*)         ← YOU EDIT ONLY HERE
-         → mockGet(schema, mockData)         client.ts: delay + Zod parse
-            → src/lib/mocks/*                delete once live
+Screen (src/routes/**)
+  │  calls a hook
+  ▼
+Hook (src/hooks/*)  ── TanStack Query: caching, loading/error, query keys
+  │  calls an api function
+  ▼
+api function (src/lib/api/*.ts)
+  │
+  ├─ USE_MOCKS = true  ─► mockGet(schema, mockData)     client.ts  (delay + Zod parse)
+  │                         └─ src/lib/mocks/*           ← delete when fully live
+  │
+  └─ USE_MOCKS = false ─► httpGet(ENDPOINTS.x(), schema) http.ts    (fetch + Zod parse)
+                            └─ VITE_API_BASE + path      ← YOUR BACKEND
+  ▼
+Zod schema (src/types/api.ts) validates the response  ── the safety boundary
+  ▼
+Domain type (src/types/domain.ts) returned to the hook → screen renders
 ```
 
-- **`src/types/domain.ts`** — ground-truth domain types (the shapes below).
-- **`src/types/api.ts`** — Zod schemas; the runtime validation boundary.
-- **`src/lib/api/client.ts`** — `mockGet` / `mockPost` (today: delay + validate mock).
-- **`src/lib/api/*.ts`** — one file per feature; the functions in §3–4.
+**One rule:** components/hooks/types never change when the backend lands — you
+only edit `endpoints.ts` (paths) and, if a real field name differs, map it inside
+the relevant `src/lib/api/*.ts` function *before* `.parse`.
 
-### The swap recipe
+### Realtime flow (KDS / aggregate stay live)
 
-Each api function today looks like this:
-
-```ts
-// src/lib/api/orders.ts
-export function getManagerTables(): Promise<Table[]> {
-  return mockGet(z.array(TableSchema), MANAGER_TABLES);
-}
+```
+backend event ─► subscribe('kds:<station>', handler)   src/lib/realtime/socket.ts
+                    │
+                    ▼
+              hook invalidates its query (useKotStream / useAggregate)
+                    ▼
+              TanStack Query refetches the board via §2  → UI updates
 ```
 
-To go live, keep the Zod parse, replace the source with a real request:
+### App / render hierarchy
 
-```ts
-export async function getManagerTables(): Promise<Table[]> {
-  const res = await fetch(`${API_BASE}/api/floor/tables?role=manager`, {
-    headers: { /* auth token, etc. */ },
-  });
-  if (!res.ok) throw new Error(`floor ${res.status}`);
-  return z.array(TableSchema).parse(await res.json()); // same schema, same return type
-}
 ```
-
-Hooks, components, types, and the query keys are untouched. If a real response
-field name differs from the domain shape, translate it inside this function (map
-the payload before `.parse`) — do **not** change the domain type. When every
-endpoint is live, delete `src/lib/mocks/*`.
-
-**Response validation is mandatory:** every response goes through its Zod schema
-so a backend shape drift fails loudly at the boundary instead of rendering
-`undefined` deep in a component.
+main.tsx ─ QueryClientProvider ─ BrowserRouter
+  └─ App.tsx  (lazy route table, one chunk per route)
+      ├─ routes/waiter/*        → WaiterShell
+      ├─ routes/kds/*           → KdsShell
+      ├─ routes/manager/*       → ManagerShell (NavRail)
+      ├─ routes/owner/*         → OwnerShell
+      └─ routes/feedback/*      → PhoneShell
+components/  naqsha/ (design primitives) · ui/ (form controls) · table/ kot/ bill/ · layouts/
+stores/      cart.ts · session.ts   (Zustand)
+```
 
 ---
 
-## 3. Read endpoints — already wired
+## 2. API endpoints — READ (wired: mock↔http switch already in place)
 
-Each row is a function that exists today in `src/lib/api/*`, already validated by
-a Zod schema and consumed by a hook. Swap the body per §2; nothing else changes.
-`ORDER = ready → breach → normal` etc. is done client-side today — move sorting
-server-side if you prefer (the frontend re-sort is harmless).
+Rename paths in `endpoints.ts`; return the listed shape. `?role=`, `?period=`,
+`?status=`, `?range=` are suggestions — adapt to your query style.
 
-| Screen | Hook | api function (`src/lib/api/…`) | Suggested request | Response type · Zod schema |
-|---|---|---|---|---|
-| A-01 | `useWaiterTables` | `orders.getWaiterTables()` | `GET /floor/tables?role=waiter` | `Table[]` · `TableSchema` |
-| A-01 | `useTakeawayOrders` | `orders.getTakeawayOrders()` | `GET /takeaway/active` | `TakeawayOrder[]` · `TakeawayOrderSchema` |
-| A-02 | `useMenuCategories` | `orders.getMenuCategories()` | `GET /menu/categories` | `MenuCategory[]` · `MenuCategorySchema` |
-| A-02 | `useMenuItems` | `orders.getMenuItems()` | `GET /menu/items` | `MenuItem[]` · `MenuItemSchema` |
-| K-01 | `useKotStream(station)` | `kitchen.getKdsBoard(station)` | `GET /kds/{station}` (`drinks`\|`main`\|`bbq`) | `KdsBoard` · `KdsBoardSchema` |
-| M-01 | `useManagerTables` | `orders.getManagerTables()` | `GET /floor/tables?role=manager` | `Table[]` · `TableSchema` |
-| M-02 | `useAggregate` | `kitchen.getAggregateRows()` | `GET /kds/aggregate` | `AggregateRow[]` · `AggregateRowSchema` |
-| M-03 | `useInvoice(tableRef)` | `pos.getInvoice(tableRef)` | `GET /pos/invoice?table={ref}` | `PosInvoice` · `PosInvoiceSchema` |
-| O-01 | `useOwnerDashboard` | `owner.getOwnerDashboard()` | `GET /owner/dashboard?period=day` | `OwnerDashboard` · `OwnerDashboardSchema` |
-| O-02 | `usePendingApprovals` | `wastage.getPendingApprovals()` | `GET /wastage/approvals?status=pending` | `Wastage[]` · `WastageSchema` |
-| O-02 | `useApprovalCounts` | `wastage.getApprovalCounts()` | `GET /wastage/approvals/counts` | `{ pending, approved, rejected }` (add a schema when wired) |
-| O-02 | `useWeekSummary` | `wastage.getWeekSummary()` | `GET /wastage/summary?range=week` | `{ rangeLabel, approvedValue, pendingValue }` (add a schema) |
-| C-01 | `useFeedbackContext(slug)` | `feedback.getFeedbackContext(slug)` | `GET /feedback/context?t={slug}` | `FeedbackContext` · `FeedbackContextSchema` |
-
-> `getApprovalCounts` / `getWeekSummary` currently return plain objects without
-> Zod. When you wire them, add a `WastageCountsSchema` / `WastageWeekSchema` to
-> `src/types/api.ts` and parse — keep the boundary consistent.
-
-### Key response shapes (see `src/types/domain.ts` for the full set)
-
-**`KdsBoard`** (K-01) — the whole station board in one call:
-```ts
-{
-  meta: { station, name, stationId, slaSeconds, activeMax,
-          avgPrepLabel, slaCompliancePct, totalPrepared },
-  queue:    Kot[],   // state: 'queued'    (waitSeconds)
-  active:   Kot[],   // state: 'preparing' | 'breach' (elapsedSeconds, slaSeconds)
-  prepared: Kot[],   // state: 'prepared'  (doneSeconds, onTime)
-}
-// Kot: { ref, station, tableRef, items: {name, qty, comment?}[], state, slaSeconds, ... }
-```
-
-**`PosInvoice`** (M-03) — batches carry the "additional order" markers:
-```ts
-{
-  ref, tableRef, tableNumber, pax, waiter: {id, name},
-  openedAtLabel, durationLabel,
-  batches: { label: string|null, lines: {qty,name,station,rate,amount}[] }[],
-  subtotalItems, subtotal, serviceChargePct, serviceCharge,
-  discount?, discountLabel?, grandTotal,
-}
-```
-
-**`Table`** (A-01/M-01) carries both waiter and manager projections — `state`
-drives card styling: `free | mine | occupied | active | breach | ready |
-feedback | billing`. Manager cards additionally use `pax, waiter, kots[]
-('pending'|'prep'|'done'), amount, actionTag, statusTag`.
-
----
-
-## 4. Action / mutation endpoints — need wiring
-
-These UI actions exist and are interactive locally, but have **no api function
-yet** — they need a backend endpoint and a small `mockPost`-style wrapper. Only
-`submitFeedback` is already wired end-to-end. Suggested contracts:
-
-| Screen · action | Status | Suggested request | Request body → response |
+| # | Method · Path (`endpoints.ts` key) | Screen · Hook | Returns (Zod schema) |
 |---|---|---|---|
-| **C-01** · Send feedback | **wired** (`feedback.submitFeedback`, `useSubmitFeedback`) | `POST /feedback` | `FeedbackSubmission` `{ tableSlug, rating 1–5, likedDishes[], comment?, phone? }` → 201 |
-| **A-02** · Submit order / Save draft | needs wiring | `POST /orders` / `PATCH /orders/{id}` | cart lines `{ itemId, qty, note? }[]` + `tableRef, pax` → created/updated invoice |
-| **K-01** · Mark prepared / Collected | needs wiring | `POST /kds/kot/{ref}/advance` | `{ toState: 'preparing'|'prepared'|'collected' }` → updated `Kot` |
-| **M-02** · Dispatch waiter / Escalate | needs wiring | `POST /kds/aggregate/{tableRef}/dispatch` (or `/escalate`) | `{ waiterId? }` → updated `AggregateRow` |
-| **M-03** · Take payment / print | needs wiring | `POST /pos/invoice/{ref}/pay` | `{ mop: 'cash'|'card'|'wallet', split: number }` → settled invoice + receipt id |
-| **M-04** · Send for approval / Save draft | needs wiring | `POST /wastage` / `PATCH /wastage/{ref}` | `{ reason, note?, items: {name,code,qty,uom,rate,amount}[] }` → created `Wastage` (status `pending`) |
-| **O-02** · Approve / Reject / Ask info | needs wiring | `POST /wastage/{ref}/decision` | `{ decision: 'approve'|'reject'|'info', note? }` → updated `Wastage`; on approve, backend does the stock deduction |
+| 1 | `GET /floor/tables?role=waiter` · `waiterTables` | A-01 · `useWaiterTables` | `Table[]` · `TableSchema` |
+| 2 | `GET /floor/tables?role=manager` · `managerTables` | M-01 · `useManagerTables` | `Table[]` · `TableSchema` |
+| 3 | `GET /takeaway/active` · `takeaway` | A-01 · `useTakeawayOrders` | `TakeawayOrder[]` · `TakeawayOrderSchema` |
+| 4 | `GET /menu/categories` · `menuCategories` | A-02 · `useMenuCategories` | `MenuCategory[]` · `MenuCategorySchema` |
+| 5 | `GET /menu/items` · `menuItems` | A-02 · `useMenuItems` | `MenuItem[]` · `MenuItemSchema` |
+| 6 | `GET /kds/{station}` · `kdsBoard` | K-01 · `useKotStream` | `KdsBoard` · `KdsBoardSchema` |
+| 7 | `GET /kds/aggregate` · `kdsAggregate` | M-02 · `useAggregate` | `AggregateRow[]` · `AggregateRowSchema` |
+| 8 | `GET /pos/invoice?table={ref}` · `invoice` | M-03 · `useInvoice` | `PosInvoice` · `PosInvoiceSchema` |
+| 9 | `GET /owner/dashboard?period=day` · `ownerDashboard` | O-01 · `useOwnerDashboard` | `OwnerDashboard` · `OwnerDashboardSchema` |
+| 10 | `GET /wastage/approvals?status=pending` · `wastagePending` | O-02 · `usePendingApprovals` | `Wastage[]` · `WastageSchema` |
+| 11 | `GET /wastage/approvals/counts` · `wastageCounts` | O-02 · `useApprovalCounts` | `{pending,approved,rejected}` · `WastageCountsSchema` |
+| 12 | `GET /wastage/summary?range=week` · `wastageWeek` | O-02 · `useWeekSummary` | `{rangeLabel,approvedValue,pendingValue}` · `WastageWeekSchema` |
+| 13 | `GET /feedback/context?t={slug}` · `feedbackContext` | C-01 · `useFeedbackContext` | `FeedbackContext` · `FeedbackContextSchema` |
 
-**How to wire one** (mirror the feedback mutation):
+`{station}` ∈ `drinks | main | bbq`. Aggregate (#7) is re-sorted client-side by
+readiness — server order doesn't matter.
+
+## 3. API endpoints — WRITE
+
+`submitFeedback` is fully wired. The rest have UI triggers but need a small
+mutation wrapper (pattern in §5). Paths are already in `endpoints.ts`.
+
+| Method · Path (`endpoints.ts` key) | Screen · action | Request body → response |
+|---|---|---|
+| `POST /feedback` · `submitFeedback` **(wired)** | C-01 · Send feedback | `{tableSlug, rating 1–5, likedDishes[], comment?, phone?}` → echo/201 |
+| `POST /orders` · `submitOrder` | A-02 · Submit order | `{tableRef, pax, lines:[{itemId,qty,note?}]}` → created `PosInvoice` |
+| `PATCH /orders/{invoiceRef}` · `updateOrder` | A-02 · Save draft / add batch | same as above → updated `PosInvoice` |
+| `POST /kds/kot/{kotRef}/advance` · `advanceKot` | K-01 · Mark prepared / Collected | `{toState:'preparing'\|'prepared'\|'collected'}` → updated `Kot` |
+| `POST /kds/aggregate/{tableRef}/dispatch` · `dispatchTable` | M-02 · Dispatch / Escalate | `{waiterId?}` → updated `AggregateRow` |
+| `POST /pos/invoice/{invoiceRef}/pay` · `payInvoice` | M-03 · Take payment | `{mop:'cash'\|'card'\|'wallet', split:number}` → settled invoice + receipt id |
+| `POST /wastage` · `submitWastage` | M-04 · Send for approval | `{reason, note?, items:[{name,code,qty,uom,rate,amount}]}` → created `Wastage` (`pending`) |
+| `POST /wastage/{wastageRef}/decision` · `decideWastage` | O-02 · Approve/Reject/Ask | `{decision:'approve'\|'reject'\|'info', note?}` → updated `Wastage`; **approve triggers stock deduction server-side** |
+
+---
+
+## 4. Response shapes (see `src/types/domain.ts` for the full, authoritative set)
+
+**`Table`** (#1,#2) — `state` drives the card. Waiter cards use `state, meta,
+statusTag`; manager cards add `pax, waiter, kots[], amount, actionTag`.
+```ts
+state: 'free'|'mine'|'occupied'|'active'|'breach'|'ready'|'feedback'|'billing'
+kots:  ('pending'|'prep'|'done')[]      // progress pips
+```
+
+**`KdsBoard`** (#6) — the whole station in one call:
+```ts
+{ meta:{station,name,stationId,slaSeconds,activeMax,avgPrepLabel,slaCompliancePct,totalPrepared},
+  queue:Kot[], active:Kot[], prepared:Kot[] }
+// Kot: {ref,station,tableRef,items:{name,qty,comment?}[],state,slaSeconds,
+//       waitSeconds?,elapsedSeconds?,doneSeconds?,onTime?}
+```
+
+**`AggregateRow`** (#7):
+```ts
+{ tableRef, tableNumber, rowState:'ready'|'breach'|'normal',
+  stations:{station,items,status:'queued'|'prep'|'ready'|'none',statusLabel,overSla?}[],
+  action:{kind:'dispatch'|'escalate'|'waiting',label,hint} }
+```
+
+**`PosInvoice`** (#8) — batches carry the "additional order" markers:
+```ts
+{ ref,tableRef,tableNumber,pax,waiter:{id,name},openedAtLabel,durationLabel,
+  batches:{label:string|null, lines:{qty,name,station,rate,amount}[]}[],
+  subtotalItems,subtotal,serviceChargePct,serviceCharge,discount?,discountLabel?,grandTotal }
+```
+
+**`OwnerDashboard`** (#9): `{greet,ownerName,lead, pnl:{netProfit,periodLabel,deltaLabel,
+lines:{label,value,pct}[]}, miniStats[], revenueByHour:{hour,pct,peak?}[], peakNote, bestDishes[], bottomNote}`.
+
+**`Wastage`** (#10): `{ref,reason,reasonLabel,note?,items:{name,code,qty,uom,rate,amount}[],
+totalValue,managerLabel,reportedAtLabel,evidenceCount,status,tag?}`.
+
+---
+
+## 5. Wiring a write endpoint (mirror the feedback mutation)
 
 ```ts
 // src/lib/api/wastage.ts
-export function submitWastage(payload: WastageDraft): Promise<Wastage> {
-  return mockPost(WastageDraftSchema, payload).then(/* … */); // → real POST
+import { httpPost, USE_MOCKS } from './http';
+import { ENDPOINTS } from './endpoints';
+export function decideWastage(ref: string, body: { decision: string; note?: string }) {
+  // add a Zod schema for the response and parse it
+  return httpPost(ENDPOINTS.decideWastage(ref), body, WastageSchema);
 }
+
 // src/hooks/useWastage.ts
-export function useSubmitWastage() {
+export function useDecideWastage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: submitWastage,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['wastage', 'pending'] }),
+    mutationFn: (v: { ref: string; decision: string; note?: string }) =>
+      decideWastage(v.ref, { decision: v.decision, note: v.note }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['wastage'] }),
   });
 }
 ```
-
-Then call `.mutate(payload)` from the screen's button and invalidate the
-relevant query keys (`['tables', …]`, `['kds', station]`, `['aggregate']`,
-`['invoice', ref]`, `['wastage', …]`).
+Then call `.mutate(...)` from the button and invalidate the affected query keys:
+`['tables', …]`, `['kds', station]`, `['aggregate']`, `['invoice', ref]`, `['wastage', …]`.
 
 ---
 
-## 5. Realtime channel contract
+## 6. Realtime
 
-`src/lib/realtime/socket.ts` is a stub with the exact surface the real socket
-must implement:
-
+`src/lib/realtime/socket.ts` exposes the exact surface the real client must keep:
 ```ts
-subscribe(channel: string, handler: (payload: unknown) => void): () => void; // returns unsubscribe
+subscribe(channel: string, handler: (payload: unknown) => void): () => void;
 ```
-
-Channels used today: `kds:drinks` · `kds:main` · `kds:bbq` · `kds:*` (wildcard,
-used by the manager aggregate). The stub emits a `KotTick` every 8s:
-
-```ts
-{ type: 'kot.tick', station: 'drinks'|'main'|'bbq', ref: string, state: KotState, at: number }
-```
-
-The KDS board (`useKotStream`) and manager aggregate (`useAggregate`) simply
-**invalidate their query on any tick**, then refetch through §3. So the real
-socket only needs to fire an event on the right channel when a KOT changes — the
-frontend re-pulls the authoritative board. Replace only this file (e.g. with a
-WebSocket/SSE client); keep `subscribe`'s signature and the channel names.
+Channels: `kds:drinks` · `kds:main` · `kds:bbq` · `kds:*`. Today it emits a fake
+`{type:'kot.tick', station, ref, state, at}` every 8s; consumers just invalidate
+and refetch. Replace this file with a real WebSocket/SSE client — keep the
+signature and channel names. The backend only needs to emit on the right channel
+when a KOT changes; the frontend re-pulls the authoritative board (§2 #6/#7).
 
 ---
 
-## 6. Domain types & conventions
+## 7. Conventions & gotchas
 
-- **All types:** `src/types/domain.ts`. **All Zod schemas:** `src/types/api.ts`.
-- **Currency:** amounts are **integer PKR** (no paisa) except wastage `rate`/
-  `amount` which are 2-decimal cost values. Formatting (`₨ 3,320`, `−530`,
-  `380.00`) lives in `src/lib/format.ts` — send raw numbers, not formatted
-  strings. Exceptions: owner `miniStats.value` and a few narrative delta strings
-  are intentionally pre-formatted display text.
-- **Time:** durations are **seconds** (`slaSeconds`, `elapsedSeconds`,
-  `waitSeconds`, `doneSeconds`); the UI formats `MM:SS`. Some fields are
-  pre-formatted labels (`openedAtLabel`, `reportedAtLabel`) — fine to keep as
-  strings, or send ISO timestamps and format client-side later.
-- **Refs are the IDs:** `T-01`, `TAKE-041`, `KOT-D-1042`, `INV-C-2026-0231`,
-  `WST-C-2026-0018` — the frontend treats these sheet-ref codes as source-of-
-  truth identifiers throughout (route params, keys).
-- **Stations** are the string union `'drinks' | 'main' | 'bbq'` everywhere.
-- **Auth:** none yet. `src/stores/session.ts` returns a hard-coded identity per
-  role. Add the token/session plumbing in the api functions' request headers
-  when auth lands.
+- **Currency:** integer **PKR** (no paisa) except wastage `rate`/`amount` (2-decimal
+  cost). Send raw numbers; the UI formats (`src/lib/format.ts`). A few owner
+  fields (`miniStats.value`, delta strings) are intentionally pre-formatted text.
+- **Time:** durations are **seconds** (`slaSeconds`, `elapsedSeconds`, …); some
+  fields are pre-formatted labels (`openedAtLabel`). Switch to ISO + client
+  formatting later if you prefer.
+- **IDs are the sheet-refs:** `T-01`, `TAKE-041`, `KOT-D-1042`, `INV-C-2026-0231`,
+  `WST-C-2026-0018` — used as route params and React keys.
+- **Validation is mandatory:** keep every response going through its Zod schema;
+  a shape drift fails at the boundary, not deep in a component.
+- **Auth:** stub in `src/stores/session.ts`; add real headers in `http.ts`.
+
+---
+
+## 8. Run / build / deploy
+
+```bash
+pnpm install
+pnpm dev         # http://localhost:5173  (mocks by default)
+pnpm build       # typecheck + dist/  (per-route lazy chunks)
+pnpm preview     # serve dist/
+pnpm typecheck   # tsc --noEmit
+pnpm lint        # eslint .
+```
+Deploy `dist/` as static files behind any web server / CDN. SPA fallback: route
+all unknown paths to `index.html`. Set `VITE_API_BASE` / `VITE_USE_MOCKS` at
+**build time** (Vite inlines them). CORS: allow the frontend origin on your API,
+or serve both behind one host.
+
+## 9. File map
+
+```
+src/
+  routes/**             screens (A-01…C-01) + /dev/components gallery
+  components/
+    naqsha/  ui/  table/  kot/  bill/  layouts/
+  lib/
+    api/     endpoints.ts (paths) · http.ts (real) · client.ts (mock) · <feature>.ts
+    mocks/   sample data (delete when live)
+    realtime/socket.ts   stub → real socket
+    format.ts            currency/time/duration
+  hooks/                 one per data need (TanStack Query)
+  stores/                cart.ts · session.ts (Zustand)
+  types/                 domain.ts (truth) · api.ts (Zod)
+  styles/                tokens.css · globals.css
+tailwind.config.ts       design tokens (source of truth)
+.env.example             VITE_API_BASE · VITE_USE_MOCKS
 ```

@@ -2,25 +2,32 @@ import { z } from 'zod';
 import type { MenuCategory, MenuItem, Table, TakeawayOrder } from '@/types/domain';
 import { MenuCategorySchema, MenuItemSchema, TableSchema, TakeawayOrderSchema } from '@/types/api';
 import { mockGet } from './client';
+import { httpGet, USE_MOCKS } from './http';
+import { ENDPOINTS } from './endpoints';
 import { MANAGER_TABLES, TAKEAWAY_ORDERS, WAITER_TABLES } from '@/lib/mocks/tables';
 import { MENU_CATEGORIES, MENU_ITEMS } from '@/lib/mocks/menu';
 
 export function getWaiterTables(): Promise<Table[]> {
-  return mockGet(z.array(TableSchema), WAITER_TABLES);
+  const schema = z.array(TableSchema);
+  return USE_MOCKS ? mockGet(schema, WAITER_TABLES) : httpGet(ENDPOINTS.waiterTables(), schema);
 }
 
 export function getManagerTables(): Promise<Table[]> {
-  return mockGet(z.array(TableSchema), MANAGER_TABLES);
+  const schema = z.array(TableSchema);
+  return USE_MOCKS ? mockGet(schema, MANAGER_TABLES) : httpGet(ENDPOINTS.managerTables(), schema);
 }
 
 export function getTakeawayOrders(): Promise<TakeawayOrder[]> {
-  return mockGet(z.array(TakeawayOrderSchema), TAKEAWAY_ORDERS);
+  const schema = z.array(TakeawayOrderSchema);
+  return USE_MOCKS ? mockGet(schema, TAKEAWAY_ORDERS) : httpGet(ENDPOINTS.takeaway(), schema);
 }
 
 export function getMenuCategories(): Promise<MenuCategory[]> {
-  return mockGet(z.array(MenuCategorySchema), MENU_CATEGORIES);
+  const schema = z.array(MenuCategorySchema);
+  return USE_MOCKS ? mockGet(schema, MENU_CATEGORIES) : httpGet(ENDPOINTS.menuCategories(), schema);
 }
 
 export function getMenuItems(): Promise<MenuItem[]> {
-  return mockGet(z.array(MenuItemSchema), MENU_ITEMS);
+  const schema = z.array(MenuItemSchema);
+  return USE_MOCKS ? mockGet(schema, MENU_ITEMS) : httpGet(ENDPOINTS.menuItems(), schema);
 }

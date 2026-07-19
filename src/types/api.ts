@@ -172,6 +172,18 @@ export const WastageSchema = z.object({
   tag: z.object({ label: z.string(), tone: ChipToneSchema }).optional(),
 });
 
+export const WastageCountsSchema = z.object({
+  pending: z.number(),
+  approved: z.number(),
+  rejected: z.number(),
+});
+
+export const WastageWeekSchema = z.object({
+  rangeLabel: z.string(),
+  approvedValue: z.number(),
+  pendingValue: z.number(),
+});
+
 export const FeedbackContextSchema = z.object({
   tableSlug: z.string(),
   tableRef: z.string(),

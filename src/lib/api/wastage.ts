@@ -1,17 +1,24 @@
 import { z } from 'zod';
 import type { Wastage } from '@/types/domain';
-import { WastageSchema } from '@/types/api';
+import { WastageCountsSchema, WastageSchema, WastageWeekSchema } from '@/types/api';
 import { mockGet } from './client';
+import { httpGet, USE_MOCKS } from './http';
+import { ENDPOINTS } from './endpoints';
 import { WASTAGE_APPROVALS, WASTAGE_COUNTS, WASTAGE_WEEK } from '@/lib/mocks/wastage';
 
 export function getPendingApprovals(): Promise<Wastage[]> {
-  return mockGet(z.array(WastageSchema), WASTAGE_APPROVALS);
+  const schema = z.array(WastageSchema);
+  return USE_MOCKS ? mockGet(schema, WASTAGE_APPROVALS) : httpGet(ENDPOINTS.wastagePending(), schema);
 }
 
-export function getApprovalCounts(): Promise<typeof WASTAGE_COUNTS> {
-  return Promise.resolve(WASTAGE_COUNTS);
+export function getApprovalCounts() {
+  return USE_MOCKS
+    ? mockGet(WastageCountsSchema, WASTAGE_COUNTS)
+    : httpGet(ENDPOINTS.wastageCounts(), WastageCountsSchema);
 }
 
-export function getWeekSummary(): Promise<typeof WASTAGE_WEEK> {
-  return Promise.resolve(WASTAGE_WEEK);
+export function getWeekSummary() {
+  return USE_MOCKS
+    ? mockGet(WastageWeekSchema, WASTAGE_WEEK)
+    : httpGet(ENDPOINTS.wastageWeek(), WastageWeekSchema);
 }
