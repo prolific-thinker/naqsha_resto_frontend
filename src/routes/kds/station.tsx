@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { KdsShell } from '@/components/layouts/KdsShell';
 import { KotCard } from '@/components/kot/KotCard';
+import { useAdvanceKot } from '@/hooks/useActions';
+import { useRealtimeStatus } from '@/hooks/useRealtimeStatus';
 import { EmptyState } from '@/components/naqsha/EmptyState';
 import { ErrorState } from '@/components/naqsha/ErrorState';
 import { cn } from '@/lib/utils';
@@ -50,9 +52,16 @@ export default function KdsStation() {
   const { station } = useParams();
   const now = useClock();
   const isValid = STATIONS.includes(station as Station);
-  const { data: board, isLoading, isError, refetch } = useKotStream(
-    (station as Station) ?? 'drinks',
-  );
+  const stationKey = (station as Station) ?? 'drinks';
+  const { data: board, isLoading, isError, refetch } = useKotStream(stationKey);
+  const realtime = useRealtimeStatus();
+  const advanceKot = useAdvanceKot(stationKey);
+
+  const advance = (kot: string, to: 'preparing' | 'prepared') => {
+    // Fire-and-forget: the optimistic update in useAdvanceKot has already moved the
+    // card, and an ILLEGAL_TRANSITION rolls it back silently.
+    void advanceKot.mutateAsync({ kot, to }).catch(() => undefined);
+  };
 
   if (!isValid) return <Navigate to="/kds/drinks" replace />;
 
@@ -112,20 +121,22 @@ export default function KdsStation() {
           <span>
             Total prepared · <strong className="text-paper">{meta.totalPrepared}</strong>
           </span>
-          <span className="text-saffron">Connected · realtime</span>
+          <span className={realtime === 'connected' ? 'text-saffron' : 'text-alert'}>
+            {realtime === 'connected' ? 'Connected · realtime' : `Realtime ${realtime} · polling`}
+          </span>
         </>
       }
     >
       <div className="grid min-h-0 flex-1 grid-cols-[1fr_1.4fr_1fr] gap-4">
         <Column label="Queue" count={queue.length} empty="Queue is clear.">
           {queue.map((kot: Kot) => (
-            <KotCard key={kot.ref} kot={kot} />
+            <KotCard key={kot.ref} kot={kot} onAdvance={() => advance(kot.ref, 'preparing')} />
           ))}
         </Column>
 
         <Column label={`Active · max ${meta.activeMax}`} count={active.length}>
           {active.map((kot: Kot) => (
-            <KotCard key={kot.ref} kot={kot} />
+            <KotCard key={kot.ref} kot={kot} onAdvance={() => advance(kot.ref, 'prepared')} />
           ))}
           {freeSlots > 0 && (
             <div

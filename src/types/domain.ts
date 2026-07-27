@@ -4,7 +4,21 @@
  * lib/api/* changes; these stay stable (handover §7).
  */
 
-export type Station = 'drinks' | 'main' | 'bbq';
+/**
+ * A KDS station key.
+ *
+ * Deliberately `string`, not a union. The backend models `KDS Station.station_key`
+ * as free-form Data precisely so the cafe can add a station without a schema change
+ * and a migrate (PLAN_FRAPPE_BACKEND.md §2.3) — a union here would make a fourth
+ * station a runtime ZodError instead of a new column.
+ *
+ * `KNOWN_STATIONS` is the three that exist today; layout code that genuinely needs a
+ * fixed set (the manager aggregate's three-column grid) should use it and treat
+ * anything else as an extra.
+ */
+export type Station = string;
+
+export const KNOWN_STATIONS = ['drinks', 'main', 'bbq'] as const;
 
 export type KotState = 'queued' | 'preparing' | 'breach' | 'prepared';
 
@@ -67,6 +81,15 @@ export type Table = {
   ref: string; // "T-01"
   number: string; // "01"
   state: TableState;
+  /**
+   * Does this table belong to the requesting waiter?
+   *
+   * Kept separate from `state`, which collapses it: the adapter only renders `mine`
+   * for a table sitting at plain `occupied`, so a waiter's own table that is cooking
+   * comes through as `active` and ownership is lost. "My tables" is a question about
+   * ownership, not about what the kitchen is doing.
+   */
+  isMine?: boolean;
   seats?: number;
   waiter?: Waiter;
   /** Human note shown under the number ("2 KOTs preparing", "4-top · window"). */
@@ -74,6 +97,8 @@ export type Table = {
   pax?: number;
   amount?: number; // running total, PKR
   openedAtLabel?: string; // "19:52"
+  /** Raw ISO session start; the bill derives its duration label from this. */
+  openedAt?: string;
   /** KOT progress pips for manager floor cards. */
   kots?: KotProgress[];
   /** The one next action ("→ dispatch waiter"). */
@@ -102,9 +127,17 @@ export type Kot = {
   tableRef: string; // "T-05" | "TAKE-042"
   items: KotItem[];
   state: KotState;
-  /** Seconds a queued ticket has waited. */
+  /**
+   * ISO timestamp the ticket entered its current running state (queued or
+   * preparing). The live timer counts up from here, so the KDS clock keeps
+   * ticking without a refetch. Maps to the KOT's `creation` / `started_at` in
+   * Frappe. When present it drives the timer; the *Seconds seeds below are the
+   * fallback for a static render.
+   */
+  receivedAt?: string;
+  /** Seconds a queued ticket has waited (seed / fallback). */
   waitSeconds?: number;
-  /** Seconds since entering Active (preparing/breach). */
+  /** Seconds since entering Active — preparing/breach (seed / fallback). */
   elapsedSeconds?: number;
   /** Target prep time in seconds. */
   slaSeconds: number;
@@ -151,6 +184,8 @@ export type AggregateRow = {
     kind: 'dispatch' | 'escalate' | 'waiting';
     label: string;
     hint: string;
+    /** For `escalate`: the station holding the table up, so the button can go there. */
+    station?: Station;
   };
 };
 
@@ -187,7 +222,18 @@ export type PosInvoice = {
   serviceCharge: number;
   discount?: number;
   discountLabel?: string;
+  /** Coupon applied to this bill: the document ref and the code the guest quoted. */
+  couponRef?: string;
+  couponCode?: string;
+  /**
+   * Tax rows exactly as ERPNext computed them (e.g. "PRA 15%"). Carried, not derived:
+   * the preview has to add up to `grandTotal` on screen, and tax is most of the gap
+   * between the subtotal and what the guest actually pays.
+   */
+  taxes: { description: string; rate: number; amount: number }[];
   grandTotal: number;
+  /** The site's real Mode of Payment names, from the server. */
+  modesOfPayment?: string[];
 };
 
 // ---- Wastage --------------------------------------------------------------

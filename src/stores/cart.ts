@@ -1,24 +1,51 @@
 import { create } from 'zustand';
+import { makeRef } from '@/lib/idempotency';
 import type { CartLine, MenuItem } from '@/types/domain';
 
 type CartState = {
   tableRef: string | null;
   pax: number | null;
   lines: CartLine[];
+  /**
+   * Idempotency key for this cart's submission. Minted on the first Submit tap and
+   * held here — NOT inside the mutation — so every retry of that same tap reuses it
+   * and the server dedupes. Cleared with the cart on success.
+   */
+  offlineRef: string | null;
+  ensureOfflineRef: () => string;
   /** Seed the cart (e.g. reopening an existing draft order). */
   seed: (tableRef: string, pax: number, lines: CartLine[]) => void;
+  /**
+   * Correct the cover count without touching the cart.
+   *
+   * Separate from `seed` because seeding clears `offlineRef`, and covers arrive a beat
+   * after the screen does (the table list resolves async) — re-seeding to set them
+   * would throw away the idempotency key of an order already being submitted.
+   */
+  setPax: (pax: number) => void;
   addItem: (item: MenuItem) => void;
   changeQty: (itemId: string, delta: number) => void;
   setNote: (itemId: string, note: string) => void;
   clear: () => void;
 };
 
-export const useCartStore = create<CartState>((set) => ({
+export const useCartStore = create<CartState>((set, get) => ({
   tableRef: null,
   pax: null,
   lines: [],
+  offlineRef: null,
 
-  seed: (tableRef, pax, lines) => set({ tableRef, pax, lines }),
+  ensureOfflineRef: () => {
+    const existing = get().offlineRef;
+    if (existing) return existing;
+    const ref = makeRef('so');
+    set({ offlineRef: ref });
+    return ref;
+  },
+
+  seed: (tableRef, pax, lines) => set({ tableRef, pax, lines, offlineRef: null }),
+
+  setPax: (pax) => set({ pax }),
 
   addItem: (item) =>
     set((state) => {
@@ -54,7 +81,7 @@ export const useCartStore = create<CartState>((set) => ({
       ),
     })),
 
-  clear: () => set({ lines: [] }),
+  clear: () => set({ lines: [], offlineRef: null }),
 }));
 
 /** Derived selectors — keep math out of components. */

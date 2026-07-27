@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { money } from '@/lib/format';
 import type { Wastage, WastageItem } from '@/types/domain';
 import { useApprovalCounts, usePendingApprovals, useWeekSummary } from '@/hooks/useWastage';
+import { useDecideWastage } from '@/hooks/useActions';
 
 function itemsSummary(items: WastageItem[]): string {
   return items
@@ -17,7 +18,15 @@ function itemsSummary(items: WastageItem[]): string {
     .join(' · ');
 }
 
-function ApprovalCard({ entry }: { entry: Wastage }) {
+function ApprovalCard({
+  entry,
+  onDecide,
+  busy,
+}: {
+  entry: Wastage;
+  onDecide: (action: 'Approve' | 'Reject') => void;
+  busy: boolean;
+}) {
   return (
     <div className="relative grid gap-6 rounded-md border border-line bg-paper-2 px-6 py-5 lg:grid-cols-[100px_1fr_240px_180px] lg:items-center">
       <CornerTicks />
@@ -59,8 +68,15 @@ function ApprovalCard({ entry }: { entry: Wastage }) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Button variant="primary">Approve</Button>
-        <Button variant="ghost">Reject</Button>
+        {/* Both go through frappe.model.workflow.apply_workflow — the Workflow is the
+            enforcement, so there is deliberately no custom endpoint to call here.
+            An owner-only transition attempted by a manager returns 403. */}
+        <Button variant="primary" disabled={busy} onClick={() => onDecide('Approve')}>
+          {busy ? 'Working…' : 'Approve'}
+        </Button>
+        <Button variant="ghost" disabled={busy} onClick={() => onDecide('Reject')}>
+          Reject
+        </Button>
         <button
           type="button"
           className="rounded py-1 text-center font-body text-xs font-medium text-muted hover:text-ink"
@@ -74,6 +90,7 @@ function ApprovalCard({ entry }: { entry: Wastage }) {
 
 export default function OwnerWastageApprovals() {
   const { data: approvals, isLoading, isError, refetch } = usePendingApprovals();
+  const decide = useDecideWastage();
   const { data: counts } = useApprovalCounts();
   const { data: week } = useWeekSummary();
 
@@ -124,7 +141,12 @@ export default function OwnerWastageApprovals() {
       ) : (
         <div className="flex flex-col gap-3">
           {(approvals ?? []).map((entry) => (
-            <ApprovalCard key={entry.ref} entry={entry} />
+            <ApprovalCard
+              key={entry.ref}
+              entry={entry}
+              busy={decide.isPending && decide.variables?.name === entry.ref}
+              onDecide={(action) => decide.mutate({ name: entry.ref, action })}
+            />
           ))}
         </div>
       )}

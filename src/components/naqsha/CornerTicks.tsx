@@ -1,23 +1,14 @@
-import { cn } from '@/lib/utils';
-
 type Props = {
-  /** Tick color. Defaults to teal (the mockup signature). */
+  /** Retained for call-site compatibility; no longer rendered. */
   className?: string;
 };
 
 /**
- * Registration ticks — 10×10px L-shapes at each corner of a card, 1.5px teal.
- * The identity signal from the mockups (`.ticks`). Render as the first child of
- * a `relative` container; ticks sit just outside the border, non-interactive.
+ * Deprecated decorative registration ticks. The "warm hospitality" redesign
+ * dropped the blueprint corner-brackets, so this now renders nothing. Kept as a
+ * no-op so the ~18 existing call sites don't need touching; delete usages as
+ * screens are next revised.
  */
-export function CornerTicks({ className }: Props) {
-  const base = 'pointer-events-none absolute h-2.5 w-2.5 border-teal';
-  return (
-    <>
-      <span className={cn(base, '-left-px -top-px border-l-[1.5px] border-t-[1.5px]', className)} />
-      <span className={cn(base, '-right-px -top-px border-r-[1.5px] border-t-[1.5px]', className)} />
-      <span className={cn(base, '-bottom-px -left-px border-b-[1.5px] border-l-[1.5px]', className)} />
-      <span className={cn(base, '-bottom-px -right-px border-b-[1.5px] border-r-[1.5px]', className)} />
-    </>
-  );
+export function CornerTicks(_props: Props) {
+  return null;
 }

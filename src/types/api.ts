@@ -5,7 +5,9 @@
  */
 import { z } from 'zod';
 
-export const StationSchema = z.enum(['drinks', 'main', 'bbq']);
+// Free-form on purpose: KDS Station.station_key is a Data field so the cafe can add
+// a station without a migration. An enum here would turn that into a ZodError.
+export const StationSchema = z.string();
 export const KotStateSchema = z.enum(['queued', 'preparing', 'breach', 'prepared']);
 export const TableStateSchema = z.enum([
   'free',
@@ -48,12 +50,16 @@ export const TableSchema = z.object({
   ref: z.string(),
   number: z.string(),
   state: TableStateSchema,
+  /** Ownership, kept separate from `state` — see the note on `Table` in domain.ts. */
+  isMine: z.boolean().optional(),
   seats: z.number().optional(),
   waiter: WaiterSchema.optional(),
   meta: z.string().optional(),
   pax: z.number().optional(),
   amount: z.number().optional(),
   openedAtLabel: z.string().optional(),
+  /** Raw ISO session start; the bill derives its duration label from this. */
+  openedAt: z.string().optional(),
   kots: z.array(KotProgressSchema).optional(),
   actionTag: z.string().optional(),
   statusTag: z.object({ label: z.string(), tone: ChipToneSchema }).optional(),
@@ -73,6 +79,7 @@ export const KotSchema = z.object({
   tableRef: z.string(),
   items: z.array(KotItemSchema),
   state: KotStateSchema,
+  receivedAt: z.string().optional(),
   waitSeconds: z.number().optional(),
   elapsedSeconds: z.number().optional(),
   slaSeconds: z.number(),
@@ -115,6 +122,8 @@ export const AggregateRowSchema = z.object({
     kind: z.enum(['dispatch', 'escalate', 'waiting']),
     label: z.string(),
     hint: z.string(),
+    /** For `escalate`: the station holding the table up, so the button can go there. */
+    station: StationSchema.optional(),
   }),
 });
 
@@ -146,7 +155,13 @@ export const PosInvoiceSchema = z.object({
   serviceCharge: z.number(),
   discount: z.number().optional(),
   discountLabel: z.string().optional(),
+  couponRef: z.string().optional(),
+  couponCode: z.string().optional(),
+  taxes: z.array(z.object({ description: z.string(), rate: z.number(), amount: z.number() })),
   grandTotal: z.number(),
+  // The site's real Mode of Payment names. There is no other way to know them, and
+  // sending one that does not exist is a hard BAD_MODE_OF_PAYMENT from pay_invoice.
+  modesOfPayment: z.array(z.string()).optional(),
 });
 
 export const WastageItemSchema = z.object({

@@ -19,12 +19,23 @@ const SCREENS: { code: string; label: string; to: string }[] = [
   { code: 'K-01', label: 'KDS · BBQ', to: '/kds/bbq' },
   { code: 'M-01', label: 'Manager · Floor', to: '/manager/floor' },
   { code: 'M-02', label: 'Manager · KDS aggregate', to: '/manager/kds' },
-  { code: 'M-03', label: 'Manager · POS', to: '/manager/pos/T-07' },
+  { code: 'M-03', label: 'Manager · POS', to: '/manager/pos' },
   { code: 'M-04', label: 'Manager · Wastage', to: '/manager/wastage' },
   { code: 'M-05', label: 'Manager · Cameras', to: '/manager/cameras' },
   { code: 'O-01', label: 'Owner · Dashboard', to: '/owner/dashboard' },
   { code: 'O-02', label: 'Owner · Wastage approvals', to: '/owner/wastage' },
   { code: 'C-01', label: 'Customer · Feedback', to: '/feedback/T-02' },
+  // ERPNext-backed feature set
+  { code: 'N-01', label: 'Manager · Menu admin', to: '/manager/menu' },
+  { code: 'I-01', label: 'Manager · Inventory', to: '/manager/inventory' },
+  { code: 'I-04', label: 'Manager · Purchasing', to: '/manager/purchasing' },
+  { code: 'G-01', label: 'Manager · Customers + loyalty', to: '/manager/customers' },
+  { code: 'G-03', label: 'Manager · Marketing', to: '/manager/marketing' },
+  { code: 'RES-01', label: 'Manager · Reservations', to: '/manager/reservations' },
+  { code: 'O-03', label: 'Owner · Reports', to: '/owner/reports' },
+  { code: 'S-02', label: 'Owner · Staff + payroll', to: '/owner/staff' },
+  { code: 'FOH-1', label: 'Customer · QR order & pay', to: '/order/T-02' },
+  { code: 'R-04', label: 'Public · Self-order kiosk', to: '/kiosk' },
 ];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

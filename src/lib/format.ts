@@ -20,14 +20,18 @@ export function cost(n: number): string {
   }).format(n);
 }
 
-/** Seconds -> "MM:SS": 134 -> "02:14". */
+/** Seconds -> "MM:SS", rolling into "H:MM:SS" past an hour: 134 -> "02:14". */
 export function duration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
-  const mm = Math.floor(s / 60)
-    .toString()
-    .padStart(2, '0');
   const ss = (s % 60).toString().padStart(2, '0');
-  return `${mm}:${ss}`;
+  const totalMinutes = Math.floor(s / 60);
+  // Minutes are capped at 60 rather than left unbounded: a ticket left overnight
+  // printed "1513:06", which reads as a broken clock rather than a very late order —
+  // exactly the moment the number matters most.
+  if (totalMinutes < 60) return `${totalMinutes.toString().padStart(2, '0')}:${ss}`;
+  const hh = Math.floor(totalMinutes / 60);
+  const mm = (totalMinutes % 60).toString().padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
 }
 
 /** Clock label "20:14:22". */

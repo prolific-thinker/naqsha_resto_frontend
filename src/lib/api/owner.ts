@@ -1,12 +1,14 @@
 import type { OwnerDashboard } from '@/types/domain';
 import { OwnerDashboardSchema } from '@/types/api';
-import { mockGet } from './client';
-import { httpGet, USE_MOCKS } from './http';
-import { ENDPOINTS } from './endpoints';
-import { OWNER_DASHBOARD } from '@/lib/mocks/owner-stats';
+import { apiGet, unwrapOk } from './http';
+import { METHODS } from './endpoints';
+import { toOwnerDashboard, type OwnerContext } from './adapters/owner';
+import type { SrvOwnerDashboard } from '@/types/server';
 
-export function getOwnerDashboard(): Promise<OwnerDashboard> {
-  return USE_MOCKS
-    ? mockGet(OwnerDashboardSchema, OWNER_DASHBOARD)
-    : httpGet(ENDPOINTS.ownerDashboard(), OwnerDashboardSchema);
+export async function getOwnerDashboard(
+  ctx: OwnerContext,
+  period: 'day' | 'week' | 'month' = 'day',
+): Promise<OwnerDashboard> {
+  const raw = await apiGet<SrvOwnerDashboard>(METHODS.ownerDashboard, { query: { period } });
+  return OwnerDashboardSchema.parse(toOwnerDashboard(unwrapOk(raw), ctx));
 }

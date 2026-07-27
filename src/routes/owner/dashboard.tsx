@@ -114,6 +114,13 @@ export default function OwnerDashboard() {
           <div className="mt-5 border-t border-ink-3 pt-5">
             {data.pnl.lines.map((line, i) => {
               const isTotal = i === data.pnl.lines.length - 1;
+              // The adapter marks a component line with a "— " prefix. Components are
+              // signed contributions and CAN be positive — a stock receipt booked
+              // without a supplier invoice credits Stock Adjustment, so "Expenses"
+              // legitimately comes out negative for the period. Printing that
+              // unsigned reads as a cost of the same size, which is the opposite.
+              const isComponent = line.label.startsWith('— ');
+              const sign = line.value < 0 ? '−' : isComponent ? '+' : '';
               return (
                 <div
                   key={line.label}
@@ -131,7 +138,8 @@ export default function OwnerDashboard() {
                       isTotal ? 'text-[15px] font-bold text-saffron' : 'font-medium text-paper',
                     )}
                   >
-                    {line.value < 0 ? `−${money(line.value)}` : money(line.value)}
+                    {sign}
+                    {money(line.value)}
                   </span>
                   <span className="text-right font-mono text-[11px] text-muted-2">{line.pct}</span>
                 </div>

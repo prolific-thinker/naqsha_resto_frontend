@@ -4,8 +4,10 @@ import { StatTile } from '@/components/naqsha/StatTile';
 import { EmptyState } from '@/components/naqsha/EmptyState';
 import { ErrorState } from '@/components/naqsha/ErrorState';
 import { TableCard } from '@/components/table/TableCard';
-import { Button } from '@/components/ui/Button';
 import { useManagerTables } from '@/hooks/useOpenTables';
+import { useFloorStats } from '@/hooks/useFloorStats';
+import { duration, money } from '@/lib/format';
+import type { SrvFloorStats } from '@/types/server';
 
 type Tile = {
   label: string;
@@ -14,42 +16,74 @@ type Tile = {
   tone: 'up' | 'down' | 'muted';
 };
 
-const FLOOR_STATS: Tile[] = [
-  { label: 'Active orders', value: '14', delta: '↑ 3 vs same time yesterday', tone: 'up' },
-  { label: 'Avg prep time', value: '08:14', delta: '↓ 00:44 vs 7-day avg', tone: 'up' },
-  { label: 'SLA breaches', value: '2', delta: 'T-03 (BBQ) · T-01 (Main)', tone: 'down' },
-  { label: 'Feedback due', value: '3', delta: 'T-02 · T-06 · TAKE-041', tone: 'muted' },
-  { label: 'Wastage today', value: '₨ 1,240', delta: '2 entries · 1 pending', tone: 'muted' },
-];
+/**
+ * The stat strip, derived from `floor.stats`.
+ *
+ * Every one of these was a hard-coded literal — "14 active orders", "SLA breaches 2 ·
+ * T-03 (BBQ)" — on a floor showing two occupied tables and a free T-03. A strip that
+ * does not move while the floor does is read as live and is not, which is worse than
+ * showing nothing.
+ */
+function buildTiles(s: SrvFloorStats | undefined): Tile[] {
+  const dash = '—';
+  return [
+    {
+      label: 'Active orders',
+      value: s ? String(s.activeOrders) : dash,
+      delta: s ? `${s.openTables} of ${s.totalTables} tables open` : 'loading…',
+      tone: 'muted',
+    },
+    {
+      label: 'Avg prep time',
+      value: s && s.avgPrepSeconds ? duration(s.avgPrepSeconds) : dash,
+      delta: s && s.avgPrepSeconds ? 'across tickets prepared today' : 'nothing prepared yet today',
+      tone: 'muted',
+    },
+    {
+      label: 'SLA breaches',
+      value: s ? String(s.slaBreaches) : dash,
+      delta: s?.breachLabels.length ? s.breachLabels.join(' · ') : 'all tickets within SLA',
+      tone: s && s.slaBreaches > 0 ? 'down' : 'up',
+    },
+    {
+      label: 'Feedback due',
+      value: s ? String(s.feedbackDue) : dash,
+      delta: s?.feedbackDue ? 'awaiting a rating' : 'nothing outstanding',
+      tone: 'muted',
+    },
+    {
+      label: 'Wastage today',
+      value: s ? `₨ ${money(s.wastageValue)}` : dash,
+      delta: s ? `${s.wastageCount} ${s.wastageCount === 1 ? 'entry' : 'entries'}` : 'loading…',
+      tone: 'muted',
+    },
+  ];
+}
 
 export default function ManagerFloor() {
   const navigate = useNavigate();
   const { data: tables, isLoading, isError, refetch } = useManagerTables();
+  const { data: stats } = useFloorStats();
 
   return (
     <ManagerShell
       title="Floor"
-      refCode="M-01 · Session S-2026-198"
+      refCode="M-01"
       right={
         <>
           <span className="font-mono text-[11px] text-muted">
-            Open tables · <strong className="text-ink">7</strong> / 10
+            Open tables · <strong className="text-ink">{stats?.openTables ?? '—'}</strong> /{' '}
+            {stats?.totalTables ?? '—'}
           </span>
           <span className="font-mono text-[11px] text-muted">
-            Takeaway · <strong className="text-ink">2</strong> in progress
+            Revenue today · <strong className="text-ink">₨ {money(stats?.sessionRevenue ?? 0)}</strong>
           </span>
-          <span className="font-mono text-[11px] text-muted">
-            Session revenue · <strong className="text-ink">₨ 47,320</strong>
-          </span>
-          <Button variant="ghost" size="sm">
-            End session
-          </Button>
         </>
       }
     >
       <div className="flex-1 overflow-y-auto px-6 py-5">
-        <div className="mb-5 grid grid-cols-5 gap-3">
-          {FLOOR_STATS.map((tile) => (
+        <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+          {buildTiles(stats).map((tile) => (
             <StatTile
               key={tile.label}
               label={tile.label}

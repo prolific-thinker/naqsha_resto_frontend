@@ -76,10 +76,27 @@ const BBQ: KdsBoard = {
   ],
 };
 
+/**
+ * Stamp each running ticket with a real `receivedAt` timestamp derived from its
+ * seed seconds at module load, so the KDS timers count up in real time (see
+ * useNow). The live backend supplies the KOT's real `creation`/`started_at`
+ * instead. Prepared tickets keep their immutable `doneSeconds` (a finished
+ * duration, not a running clock).
+ */
+const LOADED_AT = Date.now();
+function stampReceivedAt(board: KdsBoard): KdsBoard {
+  const iso = (secondsAgo: number) => new Date(LOADED_AT - secondsAgo * 1000).toISOString();
+  return {
+    ...board,
+    queue: board.queue.map((k) => ({ ...k, receivedAt: iso(k.waitSeconds ?? 0) })),
+    active: board.active.map((k) => ({ ...k, receivedAt: iso(k.elapsedSeconds ?? 0) })),
+  };
+}
+
 export const KDS_BOARDS: Record<Station, KdsBoard> = {
-  drinks: DRINKS,
-  main: MAIN,
-  bbq: BBQ,
+  drinks: stampReceivedAt(DRINKS),
+  main: stampReceivedAt(MAIN),
+  bbq: stampReceivedAt(BBQ),
 };
 
 /**

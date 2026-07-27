@@ -17,7 +17,7 @@ export function BillLine({ line, className }: { line: BillLineType; className?: 
       <span className="text-[13.5px] font-medium text-ink">
         {line.name}
         <span className="ml-2 font-mono text-[10px] uppercase tracking-ref text-muted">
-          → {STATION_LABEL[line.station]}
+          → {STATION_LABEL[line.station] ?? line.station.toUpperCase()}
         </span>
       </span>
       <span className="text-right font-mono text-xs text-muted">{money(line.rate)}</span>

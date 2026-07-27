@@ -1,33 +1,46 @@
 import { z } from 'zod';
 import type { MenuCategory, MenuItem, Table, TakeawayOrder } from '@/types/domain';
-import { MenuCategorySchema, MenuItemSchema, TableSchema, TakeawayOrderSchema } from '@/types/api';
-import { mockGet } from './client';
-import { httpGet, USE_MOCKS } from './http';
-import { ENDPOINTS } from './endpoints';
-import { MANAGER_TABLES, TAKEAWAY_ORDERS, WAITER_TABLES } from '@/lib/mocks/tables';
-import { MENU_CATEGORIES, MENU_ITEMS } from '@/lib/mocks/menu';
+import { MenuCategorySchema, MenuItemSchema, TableSchema } from '@/types/api';
+import { apiGet, unwrapOk } from './http';
+import { METHODS } from './endpoints';
+import { toMenuCategory, toMenuItem, toTableList } from './adapters';
+import type { SrvCategory, SrvMenuItem, SrvTable } from '@/types/server';
 
-export function getWaiterTables(): Promise<Table[]> {
-  const schema = z.array(TableSchema);
-  return USE_MOCKS ? mockGet(schema, WAITER_TABLES) : httpGet(ENDPOINTS.waiterTables(), schema);
+/**
+ * Floor and menu reads.
+ *
+ * Both the waiter and manager floors request `scope=all`. That is not an oversight:
+ * the waiter screen shows the *whole* floor — its legend is Free / Mine / Other
+ * waiter, and it counts "mine" client-side from the `mine` display state. `scope=mine`
+ * would hide every free table and break the screen. Two functions exist only so the
+ * two views get separate query keys.
+ */
+
+export async function getWaiterTables(): Promise<Table[]> {
+  const raw = await apiGet<SrvTable[]>(METHODS.tables, { query: { scope: 'all' } });
+  return z.array(TableSchema).parse(toTableList(unwrapOk(raw)));
 }
 
-export function getManagerTables(): Promise<Table[]> {
-  const schema = z.array(TableSchema);
-  return USE_MOCKS ? mockGet(schema, MANAGER_TABLES) : httpGet(ENDPOINTS.managerTables(), schema);
+export async function getManagerTables(): Promise<Table[]> {
+  const raw = await apiGet<SrvTable[]>(METHODS.tables, { query: { scope: 'all' } });
+  return z.array(TableSchema).parse(toTableList(unwrapOk(raw)));
 }
 
+/**
+ * Takeaway has no backend read in v1 — takeaway orders are Sales Orders with no
+ * `restaurant_table`, and nothing aggregates them yet. Returning empty is honest:
+ * the strip renders "0 in progress" rather than mock data a manager might act on.
+ */
 export function getTakeawayOrders(): Promise<TakeawayOrder[]> {
-  const schema = z.array(TakeawayOrderSchema);
-  return USE_MOCKS ? mockGet(schema, TAKEAWAY_ORDERS) : httpGet(ENDPOINTS.takeaway(), schema);
+  return Promise.resolve([]);
 }
 
-export function getMenuCategories(): Promise<MenuCategory[]> {
-  const schema = z.array(MenuCategorySchema);
-  return USE_MOCKS ? mockGet(schema, MENU_CATEGORIES) : httpGet(ENDPOINTS.menuCategories(), schema);
+export async function getMenuCategories(): Promise<MenuCategory[]> {
+  const raw = await apiGet<SrvCategory[]>(METHODS.menuCategories);
+  return z.array(MenuCategorySchema).parse(unwrapOk(raw).map(toMenuCategory));
 }
 
-export function getMenuItems(): Promise<MenuItem[]> {
-  const schema = z.array(MenuItemSchema);
-  return USE_MOCKS ? mockGet(schema, MENU_ITEMS) : httpGet(ENDPOINTS.menuItems(), schema);
+export async function getMenuItems(): Promise<MenuItem[]> {
+  const raw = await apiGet<SrvMenuItem[]>(METHODS.menuItems);
+  return z.array(MenuItemSchema).parse(unwrapOk(raw).map(toMenuItem));
 }
