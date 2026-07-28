@@ -85,6 +85,13 @@ export const KotSchema = z.object({
   slaSeconds: z.number(),
   doneSeconds: z.number().optional(),
   onTime: z.boolean().optional(),
+  // Declared here even though the adapter already sets them: Zod *strips* undeclared
+  // keys, so a field the adapter maps but the schema omits is deleted on the way
+  // through and the component silently never sees it. That is not a type error and
+  // `verify:adapters` cannot catch it either, because it parses with this same schema.
+  escalated: z.boolean().optional(),
+  escalatedAt: z.string().optional(),
+  escalationNote: z.string().optional(),
 });
 
 export const StationMetaSchema = z.object({
@@ -111,6 +118,9 @@ export const StationLineSchema = z.object({
   status: z.enum(['queued', 'prep', 'ready', 'none']),
   statusLabel: z.string(),
   overSla: z.boolean().optional(),
+  /** The still-cooking ticket an escalation targets. Same stripping caveat as KotSchema. */
+  kot: z.string().optional(),
+  escalated: z.boolean().optional(),
 });
 
 export const AggregateRowSchema = z.object({
