@@ -3,6 +3,8 @@ import { ROLE_HOME, useSessionStore } from '@/stores/session';
 import { rolesForPath } from '@/components/layouts/navConfig';
 import { RouteFallback } from '@/components/naqsha/RouteFallback';
 import { useRealtimeBridge } from '@/hooks/useRealtimeBridge';
+import { useNotifications } from '@/hooks/useNotifications';
+import { ToastHost } from '@/components/naqsha/ToastHost';
 
 /**
  * Route guard for the staff app. Public customer routes (order / feedback / kiosk)
@@ -21,6 +23,7 @@ export function RequireAuth() {
   const location = useLocation();
 
   useRealtimeBridge();
+  useNotifications();
 
   if (status === 'unknown') return <RouteFallback />;
 
@@ -33,5 +36,13 @@ export function RequireAuth() {
     return <Navigate to={ROLE_HOME[user.role]} replace />;
   }
 
-  return <Outlet />;
+  // ToastHost lives here rather than in each shell: the manager, waiter and kitchen
+  // shells are separate components, and a toast layer mounted per-shell would vanish on
+  // any navigation that crosses between them.
+  return (
+    <>
+      <Outlet />
+      <ToastHost />
+    </>
+  );
 }

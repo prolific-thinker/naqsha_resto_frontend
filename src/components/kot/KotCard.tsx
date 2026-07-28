@@ -36,6 +36,10 @@ export function KotCard({ kot, onAdvance, className }: Props) {
   const isActive = kot.state === 'preparing' || kot.state === 'breach';
   const isBreach = kot.state === 'breach';
   const isPrepared = kot.state === 'prepared';
+  // Only while there is still something to hurry. A prepared ticket that was escalated
+  // keeps the flag in the database for the audit trail, but shouting about it on the
+  // board after the food is up trains cooks to ignore the treatment.
+  const isEscalated = Boolean(kot.escalated) && !isPrepared;
 
   const now = useNow();
   const queuedWait = kot.receivedAt ? elapsedSecondsSince(kot.receivedAt, now) : kot.waitSeconds ?? 0;
@@ -54,6 +58,10 @@ export function KotCard({ kot, onAdvance, className }: Props) {
         isActive && !isBreach && accent.borderL,
         isBreach && 'border-l-alert',
         isPrepared && 'border-l-[3px] border-l-success opacity-90',
+        // Escalation reads as a full pulsing ring, where an SLA breach is a red left
+        // rail. The two must not look alike: the clock running out and a manager asking
+        // you to move are different facts, and they very often coincide.
+        isEscalated && 'border-2 border-alert animate-escalate-pulse',
         className,
       )}
     >
@@ -66,6 +74,19 @@ export function KotCard({ kot, onAdvance, className }: Props) {
         {isBreach && <Chip variant="alert">SLA breach</Chip>}
         {isPrepared && <Chip variant="success">ready</Chip>}
       </div>
+
+      {isEscalated && (
+        <div className="mb-2 rounded-sm border border-alert/50 bg-alert/15 px-2 py-1.5">
+          <span className="block font-display text-[11px] font-bold uppercase tracking-ref text-alert">
+            Manager escalated
+          </span>
+          {kot.escalationNote && (
+            <span className="mt-0.5 block text-[11px] italic text-paper-4">
+              “{kot.escalationNote}”
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="font-display text-base font-bold text-paper">{kot.tableRef}</div>
 

@@ -81,9 +81,22 @@ const config: Config = {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.4' },
         },
+        'toast-in': {
+          from: { opacity: '0', transform: 'translateY(8px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        // The escalated ticket breathes rather than blinking. A hard blink on a board a
+        // cook stares at for a whole service is unpleasant to work under, and the ticket
+        // that gets escalated is usually already the one they are looking at.
+        'escalate-pulse': {
+          '0%, 100%': { borderColor: 'rgb(178 58 46 / 1)' },
+          '50%': { borderColor: 'rgb(178 58 46 / 0.35)' },
+        },
       },
       animation: {
         pulse: 'pulse 1.5s infinite',
+        'toast-in': 'toast-in 180ms ease-out',
+        'escalate-pulse': 'escalate-pulse 1.8s ease-in-out infinite',
       },
     },
   },

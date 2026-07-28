@@ -144,6 +144,17 @@ export type Kot = {
   /** For prepared tickets: total prep duration + on-time flag. */
   doneSeconds?: number;
   onTime?: boolean;
+  /**
+   * A manager has asked this station to hurry.
+   *
+   * Distinct from `state === 'breach'`, and rendered differently on purpose: a breach
+   * means the clock ran out, an escalation means a human is asking. If the two looked
+   * the same, escalating an already-late ticket would tell the cook nothing — which is
+   * exactly the moment a manager reaches for it.
+   */
+  escalated?: boolean;
+  escalatedAt?: string;
+  escalationNote?: string;
 };
 
 export type StationMeta = {
@@ -172,6 +183,12 @@ export type StationLine = {
   status: 'queued' | 'prep' | 'ready' | 'none';
   statusLabel: string; // "✓ ready · 04:12" | "queued · 01:12 wait"
   overSla?: boolean;
+  /**
+   * The oldest still-cooking ticket for this station on this table — what an escalation
+   * targets. Absent once the station has nothing left to hurry.
+   */
+  kot?: string;
+  escalated?: boolean;
 };
 
 export type AggregateRow = {

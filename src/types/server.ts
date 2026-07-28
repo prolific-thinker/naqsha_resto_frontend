@@ -139,6 +139,10 @@ export type SrvKot = {
   startedAt: string | null;
   preparedAt: string | null;
   onTime: boolean | null;
+  /** Persisted escalation flag, so the board still shows it after a refresh. */
+  escalated?: boolean | null;
+  escalatedAt?: string | null;
+  escalationNote?: string | null;
   items: SrvKotItem[];
 };
 
@@ -170,7 +174,7 @@ export type SrvAggregateRow = {
   worstState: 'queued' | 'preparing' | 'breach' | 'prepared';
   oldestReceivedAt: string | null;
   /** One entry per KOT, so a station can repeat or be absent entirely. */
-  stations: { station: string; state: string }[];
+  stations: { station: string; state: string; kot?: string; escalated?: boolean }[];
 };
 
 export type SrvAdvanceResult = {

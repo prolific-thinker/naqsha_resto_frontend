@@ -87,6 +87,17 @@ export function advanceKot(kot: string, to: 'preparing' | 'prepared'): Promise<R
   return apiPost<SrvAdvanceResult>(METHODS.advanceKot, { kot, to });
 }
 
+/**
+ * Ask a station to hurry a ticket. Manager+ on the server.
+ *
+ * No offlineRef, and none is needed: re-escalating answers `ALREADY_ESCALATED` as a
+ * business failure rather than double-stamping the audit trail, so a retried or
+ * double-tapped call cannot produce a second escalation.
+ */
+export function escalateKot(kot: string, note?: string): Promise<Result<{ kot: string }>> {
+  return apiPost<{ kot: string }>(METHODS.escalateKot, { kot, note });
+}
+
 // ---------------------------------------------------------------------------
 // Billing
 // ---------------------------------------------------------------------------

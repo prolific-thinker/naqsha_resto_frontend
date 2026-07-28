@@ -45,6 +45,9 @@ export function toKot(raw: SrvKot, now: number = Date.now()): Kot {
     // average on the same wall display.
     doneSeconds: raw.state === 'prepared' ? secondsBetween(raw.queuedAt, raw.preparedAt) : undefined,
     onTime: opt(raw.onTime),
+    escalated: Boolean(raw.escalated),
+    escalatedAt: opt(raw.escalatedAt),
+    escalationNote: opt(raw.escalationNote),
   };
 }
 
@@ -123,7 +126,19 @@ export function toAggregateRow(
     else if (status === 'prep') statusLabel = `${duration(elapsed)} preparing`;
     else statusLabel = `queued · ${duration(elapsed)} wait`;
 
-    return { station: key, items, status, statusLabel, overSla: overSla || undefined };
+    // Escalation targets the oldest ticket this station still has to cook. A prepared
+    // one needs no hurrying, and `entries` is already in queued_at order from the server.
+    const pending = entries.find((e) => e.state !== 'prepared');
+
+    return {
+      station: key,
+      items,
+      status,
+      statusLabel,
+      overSla: overSla || undefined,
+      kot: pending?.kot,
+      escalated: pending?.escalated || undefined,
+    };
   });
 
   const waiting = stations.filter((s) => s.status === 'queued' || s.status === 'prep');

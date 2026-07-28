@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Check, Timer } from 'lucide-react';
 import { ManagerShell } from '@/components/layouts/ManagerShell';
 import { Chip } from '@/components/naqsha/Chip';
@@ -11,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { KNOWN_STATIONS, type AggregateRow, type Station, type StationLine } from '@/types/domain';
 import { useAggregate } from '@/hooks/useAggregate';
-import { useDispatchTable } from '@/hooks/useActions';
+import { useDispatchTable, useEscalateKot } from '@/hooks/useActions';
 import { useSessionStore } from '@/stores/session';
 
 const STATION_BORDER: Record<Station, string> = {
@@ -88,21 +87,43 @@ function StationCol({ line }: { line: StationLine }) {
   );
 }
 
+/**
+ * Which station line an escalation should target.
+ *
+ * The one the row's own action already blames when it is still cooking, otherwise the
+ * worst station that has something left to hurry. Escalating a station whose food is
+ * already up tells a cook to rush something they have finished.
+ */
+function escalateTargetFor(row: AggregateRow): StationLine | undefined {
+  const blamed = row.stations.find((s) => s.station === row.action.station && s.kot);
+  if (blamed) return blamed;
+  return (
+    row.stations.find((s) => s.overSla && s.kot) ??
+    row.stations.find((s) => s.status === 'prep' && s.kot) ??
+    row.stations.find((s) => s.kot)
+  );
+}
+
 function ActionCell({
   row,
   onDispatch,
   onEscalate,
   busy,
   canDispatch,
+  escalateTarget,
 }: {
   row: AggregateRow;
   onDispatch: () => void;
   onEscalate: () => void;
   busy: boolean;
-  /** `dispatch_table` is manager+; kitchen reads this board but cannot act on it. */
+  /** `dispatch_table` and `escalate` are both manager+; kitchen reads but cannot act. */
   canDispatch: boolean;
+  /** The station line an escalation would target, if there is still one cooking. */
+  escalateTarget?: StationLine;
 }) {
   const { action } = row;
+  const escalated = Boolean(escalateTarget?.escalated);
+  const canEscalate = Boolean(escalateTarget?.kot);
   return (
     <div className="text-right">
       {action.kind === 'dispatch' &&
@@ -117,11 +138,37 @@ function ActionCell({
             </Chip>
           </span>
         ))}
-      {action.kind === 'escalate' && (
-        <Button variant="alert" className="w-full" onClick={onEscalate}>
-          {action.label}
-        </Button>
-      )}
+      {action.kind === 'escalate' &&
+        (!canDispatch ? (
+          // Escalation is manager+ for the same reason dispatch is: if a kitchen lead
+          // can escalate their own board, everything is escalated by the second week
+          // and the flag stops carrying information.
+          <span className="flex w-full justify-center">
+            <Chip variant="alert" className="w-full justify-center">
+              {action.label}
+            </Chip>
+          </span>
+        ) : escalated ? (
+          <span className="flex w-full justify-center">
+            <Chip variant="alert" className="w-full justify-center">
+              Escalated · kitchen told
+            </Chip>
+          </span>
+        ) : (
+          <Button
+            variant="alert"
+            className="w-full"
+            onClick={onEscalate}
+            disabled={busy || !canEscalate}
+            title={
+              canEscalate
+                ? 'Tell that station a manager is asking them to hurry'
+                : 'Nothing still cooking on this table to escalate'
+            }
+          >
+            {busy ? 'Telling the kitchen…' : action.label}
+          </Button>
+        ))}
       {action.kind === 'waiting' && (
         <span className="flex w-full justify-center">
           <Chip variant="muted" className="w-full justify-center">
@@ -139,7 +186,7 @@ function ActionCell({
 export default function ManagerKdsAggregate() {
   const { data: rows, isLoading, isError, refetch } = useAggregate();
   const dispatch = useDispatchTable();
-  const navigate = useNavigate();
+  const escalate = useEscalateKot();
   const role = useSessionStore((s) => s.user?.role);
   const canDispatch = role === 'manager' || role === 'owner';
   const [filter, setFilter] = useState<Station | 'all'>('all');
@@ -258,12 +305,22 @@ export default function ManagerKdsAggregate() {
                 ))}
                 <ActionCell
                   row={row}
-                  busy={dispatch.isPending && dispatch.variables === row.tableRef}
-                  onDispatch={() => dispatch.mutate(row.tableRef)}
-                  onEscalate={() =>
-                    navigate(`/kds/${row.action.station ?? KNOWN_STATIONS[0]}`)
+                  busy={
+                    (dispatch.isPending && dispatch.variables === row.tableRef) ||
+                    (escalate.isPending && escalate.variables?.kot === escalateTargetFor(row)?.kot)
                   }
+                  onDispatch={() => dispatch.mutate(row.tableRef)}
+                  // Escalating sends a message to the station; it does not navigate the
+                  // manager anywhere. This used to open /kds/<station>, which moved the
+                  // manager to the board instead of telling anyone on it.
+                  onEscalate={() => {
+                    const target = escalateTargetFor(row);
+                    if (target?.kot) {
+                      escalate.mutate({ kot: target.kot, station: target.station });
+                    }
+                  }}
                   canDispatch={canDispatch}
+                  escalateTarget={escalateTargetFor(row)}
                 />
               </div>
             ))}

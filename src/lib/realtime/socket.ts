@@ -86,6 +86,11 @@ function fanOut(event: string, payload: Record<string, unknown>): void {
     case EVENTS.menuUpdate:
       emit('menu', payload);
       break;
+    // Addressed by the server, so there is nothing to filter here — if it arrived, this
+    // client is in the room it was sent to.
+    case EVENTS.notify:
+      emit('notify', payload);
+      break;
     default:
       break;
   }
@@ -116,6 +121,29 @@ function ensureConnected(): void {
   for (const event of Object.values(EVENTS)) {
     socket.on(event, (payload: Record<string, unknown>) => fanOut(event, payload ?? {}));
   }
+}
+
+const STATION_DOCTYPE = 'KDS Station';
+
+/**
+ * Join a KDS Station's document room so this screen receives escalations for it.
+ *
+ * `doc_subscribe` is Frappe's own socket handler (frappe/realtime/handlers.js) and it
+ * permission-checks the doctype and name server-side before joining, so a client cannot
+ * listen to a station it has no read access to just by asking.
+ *
+ * Takes the station **id** (`DRINKS`), not the lowercase key (`drinks`) — those are
+ * deliberately different, see FRAPPE_GOTCHAS.md §2. Passing the key joins a room that
+ * does not exist and no escalation ever arrives, silently.
+ */
+export function subscribeStationRoom(stationId: string): () => void {
+  ensureConnected();
+  const name = stationId.toUpperCase();
+  // May fire before 'connect'; socket.io buffers emits until the handshake completes.
+  socket?.emit('doc_subscribe', STATION_DOCTYPE, name);
+  return () => {
+    socket?.emit('doc_unsubscribe', STATION_DOCTYPE, name);
+  };
 }
 
 export function disconnectSocket(): void {

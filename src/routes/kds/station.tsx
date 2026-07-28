@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { clock, dayLabel } from '@/lib/format';
 import type { Kot, Station } from '@/types/domain';
 import { useKotStream } from '@/hooks/useKotStream';
+import { useStationNotifications } from '@/hooks/useNotifications';
 
 const STATIONS: Station[] = ['drinks', 'main', 'bbq'];
 
@@ -56,6 +57,11 @@ export default function KdsStation() {
   const { data: board, isLoading, isError, refetch } = useKotStream(stationKey);
   const realtime = useRealtimeStatus();
   const advanceKot = useAdvanceKot(stationKey);
+
+  // Join this station's room so a manager's escalation reaches this board and no other.
+  // Keyed on the station **id** the server returns (`DRINKS`), not the route's lowercase
+  // key — the two differ deliberately, see FRAPPE_GOTCHAS.md §2.
+  useStationNotifications(board?.meta.stationId);
 
   const advance = (kot: string, to: 'preparing' | 'prepared') => {
     // Fire-and-forget: the optimistic update in useAdvanceKot has already moved the

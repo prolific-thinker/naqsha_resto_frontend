@@ -38,6 +38,7 @@ export const METHODS = {
   kdsBoard: 'naqsha_pos.api.kds.board',
   kdsAggregate: 'naqsha_pos.api.kds.aggregate',
   advanceKot: 'naqsha_pos.api.kds.advance_kot',
+  escalateKot: 'naqsha_pos.api.kds.escalate',
 
   // ---- billing ----
   getInvoice: 'naqsha_pos.api.billing.get_invoice',
@@ -129,14 +130,21 @@ export const RESOURCE = {
 } as const;
 
 /**
- * Realtime events published by naqsha_pos.core.realtime. Payloads are hints for
- * which query key to invalidate, never data to render.
+ * Realtime events published by naqsha_pos.core.realtime.
+ *
+ * The first four are *invalidation hints*: payloads say which query key to refetch,
+ * never data to render, and they go to the site room because every screen wants them.
+ *
+ * `notify` is different in kind. It is addressed — the server publishes it to one user's
+ * room or one KDS Station's doc room — so receiving one already means it was meant for
+ * this screen, and it interrupts with a toast rather than refreshing something.
  */
 export const EVENTS = {
   kotUpdate: 'naqsha:kot_update',
   tableUpdate: 'naqsha:table_update',
   invoiceUpdate: 'naqsha:invoice_update',
   menuUpdate: 'naqsha:menu_update',
+  notify: 'naqsha:notify',
 } as const;
 
 /**

@@ -31,6 +31,25 @@ export function useDispatchTable() {
   });
 }
 
+/**
+ * Manager escalates a ticket to a station.
+ *
+ * Deliberately not optimistic. The entire point of the action is that a message reached
+ * the kitchen; painting the card as escalated before the server confirmed would tell the
+ * manager the bar had been chased when it had not.
+ */
+export function useEscalateKot() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { kot: string; note?: string; station?: string }) =>
+      api.escalateKot(vars.kot, vars.note),
+    onSettled: (_res, _err, vars) => {
+      void qc.invalidateQueries({ queryKey: ['aggregate'] });
+      if (vars.station) void qc.invalidateQueries({ queryKey: ['kds', vars.station] });
+    },
+  });
+}
+
 export function useSubmitOrder() {
   const qc = useQueryClient();
   return useMutation({
