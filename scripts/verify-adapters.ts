@@ -55,7 +55,10 @@ import {
 import type * as S from '@/types/server';
 
 const BASE = process.env.NAQSHA_BASE ?? 'http://naqsha_ops.localhost:8080';
-const USER = process.env.NAQSHA_USER ?? 'manager@naqsha.local';
+// Owner, not manager. The script walks *every* adapter, and owner is the only role
+// that can reach all of them — `owner.dashboard`, `reports.*` and `staff.payroll` are
+// owner-only by design, so a manager run dies on the first of them with a 403.
+const USER = process.env.NAQSHA_USER ?? 'owner@naqsha.local';
 const PASS = process.env.NAQSHA_PASS ?? 'Naqsha@2026';
 
 let cookie = '';
@@ -247,4 +250,10 @@ async function verifyErp(): Promise<void> {
   );
 }
 
-void main();
+main().catch((err: unknown) => {
+  // A non-2xx from `call` aborts the walk before main's own exit at the end. Print it
+  // as a message rather than a node stack — the useful half is which method answered
+  // what, and a 403 here usually means NAQSHA_USER cannot reach the whole surface.
+  console.error(`\nverify:adapters aborted — ${err instanceof Error ? err.message : String(err)}\n`);
+  process.exit(1);
+});

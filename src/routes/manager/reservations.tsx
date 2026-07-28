@@ -35,6 +35,14 @@ const RES_CHIP: Record<ReservationStatus, ChipVariant> = {
   cancelled: 'muted',
   no_show: 'alert',
 };
+/**
+ * The guest name needs a floor, not a bare `1fr`. The status column carries a table
+ * ref, a chip and two buttons, so the fixed columns are wide; with `1fr` the name was
+ * the only thing that could give and it collapsed to "C." on a manager screen narrower
+ * than ~1100px. A `minmax` floor makes the name the last thing to shrink, not the first.
+ */
+const RES_COLS = '110px minmax(150px, 1fr) 115px 130px 60px 260px';
+
 const WL_CHIP: Record<WaitlistEntry['status'], ChipVariant> = {
   waiting: 'amber',
   seated: 'success',
@@ -286,62 +294,67 @@ function ReservationsTab() {
       ) : rows.length === 0 ? (
         <EmptyState message="No reservations booked." />
       ) : (
-        <>
-          <DataRow header cols="130px 1fr 130px 140px 60px 300px">
-            <span>Ref</span>
-            <span>Guest</span>
-            <span>Phone</span>
-            <span>When</span>
-            <span className="text-right">Party</span>
-            <span className="text-right">Table / status</span>
-          </DataRow>
-          {rows.map((r) => (
-            <DataRow key={r.ref} cols="130px 1fr 130px 140px 60px 300px">
-              <span className="font-mono text-[11px] text-muted">{r.ref}</span>
-              <button
-                type="button"
-                onClick={() => setEditing(r)}
-                className="truncate text-left font-medium text-ink hover:underline"
-              >
-                {r.guestName}
-              </button>
-              <span className="font-mono text-[12px] text-muted">{r.phone}</span>
-              <span className="text-[12.5px] text-ink">{r.reservedAtLabel}</span>
-              <span className="text-right font-mono">{r.partySize}</span>
-              <span className="flex items-center justify-end gap-2">
-                {r.tableRef && (
-                  <span className="font-mono text-[11px] text-muted">{r.tableRef}</span>
-                )}
-                <Chip variant={RES_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip>
-                {r.status === 'booked' && (
-                  <>
-                    <Button variant="primary" size="sm" onClick={() => setSeating(r)}>
-                      Seat
-                    </Button>
+        // Scrolls the rows, not the page. Below ~1100px the fixed columns cannot all
+        // fit; without this the whole shell scrolls sideways and "No-show" sits
+        // off-screen with nothing to indicate it is reachable.
+        <div className="overflow-x-auto">
+          <div className="min-w-[900px]">
+            <DataRow header cols={RES_COLS}>
+              <span>Ref</span>
+              <span>Guest</span>
+              <span>Phone</span>
+              <span>When</span>
+              <span className="text-right">Party</span>
+              <span className="text-right">Table / status</span>
+            </DataRow>
+            {rows.map((r) => (
+              <DataRow key={r.ref} cols={RES_COLS}>
+                <span className="font-mono text-[11px] text-muted">{r.ref}</span>
+                <button
+                  type="button"
+                  onClick={() => setEditing(r)}
+                  className="truncate text-left font-medium text-ink hover:underline"
+                >
+                  {r.guestName}
+                </button>
+                <span className="font-mono text-[12px] text-muted">{r.phone}</span>
+                <span className="text-[12.5px] text-ink">{r.reservedAtLabel}</span>
+                <span className="text-right font-mono">{r.partySize}</span>
+                <span className="flex items-center justify-end gap-2">
+                  {r.tableRef && (
+                    <span className="font-mono text-[11px] text-muted">{r.tableRef}</span>
+                  )}
+                  <Chip variant={RES_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip>
+                  {r.status === 'booked' && (
+                    <>
+                      <Button variant="primary" size="sm" onClick={() => setSeating(r)}>
+                        Seat
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => mark(r.ref, 'no_show')}
+                        title="Mark as a no-show"
+                      >
+                        No-show
+                      </Button>
+                    </>
+                  )}
+                  {(r.status === 'no_show' || r.status === 'cancelled') && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => mark(r.ref, 'no_show')}
-                      title="Mark as a no-show"
+                      onClick={() => mark(r.ref, 'booked')}
+                      title="Put this booking back on the list"
                     >
-                      No-show
+                      Re-book
                     </Button>
-                  </>
-                )}
-                {(r.status === 'no_show' || r.status === 'cancelled') && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => mark(r.ref, 'booked')}
-                    title="Put this booking back on the list"
-                  >
-                    Re-book
-                  </Button>
-                )}
-              </span>
-            </DataRow>
-          ))}
-        </>
+                  )}
+                </span>
+              </DataRow>
+            ))}
+          </div>
+        </div>
       )}
 
       {creating && <ReservationForm onClose={() => setCreating(false)} />}
